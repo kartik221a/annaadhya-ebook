@@ -121,7 +121,7 @@ curl -s -b "$JAR" -o /tmp/aa10.html "$BASE/web-admin/orders"
 grep -q "Orders" /tmp/aa10.html && ok "orders page" || bad "orders page"
 
 say "11. storefront unaffected"
-curl -s -o /tmp/aa11.html -w "%{http_code}" "$BASE/" | grep -q 200 && grep -q "Browse by collection" /tmp/aa11.html && ok "homepage renders" || bad "homepage"
+curl -s -o /tmp/aa11.html -w "%{http_code}" "$BASE/" | grep -q 200 && grep -q "Browse by Category" /tmp/aa11.html && ok "homepage renders" || bad "homepage"
 
 pkill -f "php -S .*8080" 2>/dev/null
 rm -f "$JAR"

@@ -36,7 +36,7 @@ img{max-width:100%}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
 .card h2{font-size:15px;font-weight:750;margin:0 0 14px;letter-spacing:-.2px}
 .card h2.mt{margin-top:22px}
-.stat-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
+.stat-cards{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:20px}
 .stat b{display:block;font-size:26px;font-weight:800;letter-spacing:-.5px}
 .stat span{color:var(--mut);font-size:13px}
 .dash-cols{display:grid;grid-template-columns:1fr 1.2fr;gap:16px;align-items:start}
@@ -144,3 +144,10 @@ input[type=file]{font-size:13px;color:var(--mut)}
   .search{max-width:none}
   .c-act{width:auto}
 }
+
+/* ---------- messages + subscribers (v1.2) ---------- */
+.flash.warn{background:rgba(245,158,11,.12);color:#c07d00;border:1px solid rgba(245,158,11,.4)}
+.stat-cards{grid-auto-flow:row}
+.msg-card h2{margin:0 0 6px;font-size:17px}
+.msg-card .muted{margin:0 0 18px}
+.msg-body{background:var(--low,#f6f7f9);border:1px solid var(--line,#e4e7ec);border-radius:12px;padding:18px 20px;font-size:14px;line-height:1.8;white-space:pre-wrap;color:var(--tx,#1c2330)}

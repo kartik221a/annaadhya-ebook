@@ -50,9 +50,16 @@ p,h1,h2,h3,h4{margin:0}
 .aa-nav-search input{width:100%;background:var(--aa-bg);border:1px solid var(--aa-line2);border-radius:10px;padding:8px 10px 8px 34px;color:var(--aa-tx);font-size:13px;outline:none;font-family:inherit}
 .aa-nav-search input::placeholder{color:#7a7f8f}
 .aa-nav-search .aa-ms{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:18px;color:var(--aa-dim);pointer-events:none}
-.aa-cartbtn{position:relative;padding:9px;border-radius:10px;background:var(--aa-cont);border:1px solid var(--aa-line2);color:var(--aa-warm)!important;text-decoration:none!important;display:flex}
-.aa-cartbtn .aa-ms{font-size:20px}
-.aa-cartbtn:hover{color:var(--aa-gold)!important;border-color:var(--aa-gold)}
+.aa-cartbtn,.aa-actbtn{position:relative;padding:9px;border-radius:10px;background:var(--aa-cont);border:1px solid var(--aa-line2);color:var(--aa-warm)!important;text-decoration:none!important;display:flex}
+.aa-cartbtn .aa-ms,.aa-actbtn .aa-ms{font-size:20px}
+.aa-cartbtn:hover,.aa-actbtn:hover{color:var(--aa-gold)!important;border-color:var(--aa-gold)}
+.aa-wishbtn{position:absolute;top:10px;right:10px;z-index:2;width:34px;height:34px;border-radius:50%;background:rgba(10,14,19,.72);backdrop-filter:blur(4px);border:1px solid var(--aa-line2);color:#c9b8a4!important;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;transition:color .15s,border-color .15s,transform .15s}
+.aa-wishbtn .aa-ms{font-size:17px}
+.aa-wishbtn:hover{color:var(--aa-goldbg)!important;border-color:var(--aa-goldbg);transform:scale(1.06)}
+.aa-wishbtn.aa-on{color:var(--aa-goldbg)!important;border-color:var(--aa-goldbg);background:rgba(71,42,0,.55)}
+.aa-wishbtn.aa-on .aa-ms{font-variation-settings:'FILL' 1}
+.aa-toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(16px);z-index:2000;background:var(--aa-high);color:var(--aa-tx);font-size:13px;font-weight:600;border:1px solid var(--aa-goldbg);border-radius:10px;padding:12px 18px;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;box-shadow:0 12px 32px rgba(0,0,0,.5)}
+.aa-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .aa-cartcount{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:9px;background:var(--aa-goldbg);color:var(--aa-ongold);font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px}
 .aa-cartcount[hidden]{display:none}
 .aa-nav-cta{display:none!important}
@@ -76,7 +83,7 @@ p,h1,h2,h3,h4{margin:0}
 .aa-cover{width:100%;height:100%;object-fit:cover;transition:transform .5s ease;display:block}
 .aa-card:hover .aa-cover{transform:scale(1.05)}
 .aa-fmt{position:absolute;top:12px;left:12px;background:rgba(10,14,19,.82);backdrop-filter:blur(6px);border:1px solid var(--aa-line2);color:#a08e7a;font-size:10px;font-weight:700;letter-spacing:.06em;padding:4px 8px;border-radius:6px;text-transform:uppercase}
-.aa-badge{position:absolute;top:12px;right:12px;background:var(--aa-goldbg);color:var(--aa-ongold);font-size:10px;font-weight:800;letter-spacing:.06em;padding:4px 10px;border-radius:999px;text-transform:uppercase}
+.aa-badge{position:absolute;top:12px;right:52px;background:var(--aa-goldbg);color:var(--aa-ongold);font-size:10px;font-weight:800;letter-spacing:.06em;padding:4px 10px;border-radius:999px;text-transform:uppercase}
 .aa-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .aa-mcat{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--aa-goldbg);text-transform:uppercase}
 .aa-mauth{font-size:12px;color:var(--aa-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -111,8 +118,9 @@ p,h1,h2,h3,h4{margin:0}
 </style>
 HTML;
 
-/* Nav markup. %%HOME_ON%% / %%SHOP_ON%% become the active-link class. */
-function aa_nav_html( $home_on, $shop_on ) {
+/* Sticky top navigation. $active: home|shop|about|contact|library|account. */
+function aa_nav_html( $active = '' ) {
+        $cls = function ( $key ) use ( $active ) { return $key === $active ? 'aa-on' : ''; };
         return '<header class="aa-nav">
   <div class="aa-wrap aa-nav-in">
     <a class="aa-brand" href="/">
@@ -120,16 +128,19 @@ function aa_nav_html( $home_on, $shop_on ) {
       <span class="aa-brand-name">Annaadhya</span>
     </a>
     <nav class="aa-menu">
-      <a href="/" class="' . $home_on . '">Home</a>
-      <a href="/shop/" class="' . $shop_on . '">Shop</a>
-      <a href="/shop/#aa-categories">Categories</a>
-      <a href="/contact/">Contact</a>
+      <a href="/" class="' . $cls( 'home' ) . '">Home</a>
+      <a href="/shop/" class="' . $cls( 'shop' ) . '">Shop</a>
+      <a href="/about/" class="' . $cls( 'about' ) . '">About</a>
+      <a href="/contact/" class="' . $cls( 'contact' ) . '">Contact</a>
     </nav>
     <div class="aa-nav-r">
       <form class="aa-nav-search" action="/shop/" method="get">
         <span class="aa-ms">search</span>
         <input type="search" name="book" placeholder="Quick search books..." aria-label="Search books">
       </form>
+      <a class="aa-actbtn" href="/my-account/" aria-label="My Account">
+        <span class="aa-ms">person</span>
+      </a>
       <a class="aa-cartbtn" href="/cart/" aria-label="Cart">
         <span class="aa-ms">shopping_bag</span>
         <span class="aa-cartcount" data-aa-cartcount hidden>0</span>
@@ -141,19 +152,22 @@ function aa_nav_html( $home_on, $shop_on ) {
   <div class="aa-mobile-menu">
     <a href="/">Home</a>
     <a href="/shop/">Shop</a>
-    <a href="/shop/#aa-categories">Categories</a>
+    <a href="/about/">About</a>
     <a href="/contact/">Contact</a>
+    <a href="/library/">My Library</a>
+    <a href="/my-account/">My Account</a>
     <a href="/cart/">Cart</a>
   </div>
 </header>';
 }
 
-/* Footer + the page behaviour script (cart badge, category counts, sort, newsletter). */
+/* Footer + the page behaviour script (cart badge, category counts, sort, newsletter, wishlist). */
 function aa_footer_html() {
         $year = date( 'Y' );
         return '<style>
 .aa-footer{background:var(--aa-bg);border-top:1px solid var(--aa-line);padding:64px 0 32px}
-.aa-fgrid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:40px;margin-bottom:48px}
+.aa-fgrid{display:grid;grid-template-columns:1.8fr 1fr 1fr 1fr 1fr;gap:34px;margin-bottom:48px}
+@media(max-width:1024px){.aa-fgrid{grid-template-columns:1fr 1fr 1fr}}
 @media(max-width:900px){.aa-fgrid{grid-template-columns:1fr 1fr}}
 @media(max-width:560px){.aa-fgrid{grid-template-columns:1fr}}
 .aa-fbrand-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}
@@ -199,19 +213,29 @@ function aa_footer_html() {
         <h4>Company</h4>
         <ul>
           <li><a href="/about/">About Us</a></li>
+          <li><a href="/contact/">Contact Support</a></li>
           <li><a href="/contact/">Author Submissions</a></li>
           <li><a href="/contact/">Affiliate Program</a></li>
-          <li><a href="/about/">Press</a></li>
         </ul>
       </div>
       <div>
-        <h4>Support &amp; Legal</h4>
+        <h4>Account</h4>
         <ul>
-          <li><a href="/contact/">UPI &amp; Payment Help</a></li>
-          <li><a href="/refund_returns/">Refund Policy</a></li>
-          <li><a href="/privacy-policy/">Privacy Policy</a></li>
-          <li><a href="/contact/">Contact Support</a></li>
+          <li><a href="/library/">My Library</a></li>
+          <li><a href="/my-account/">My Account</a></li>
+          <li><a href="/my-account/wishlist/">Wishlist</a></li>
+          <li><a href="/cart/">Shopping Cart</a></li>
           <li><a href="/web-admin/">Site Admin</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Legal</h4>
+        <ul>
+          <li><a href="/privacy-policy/">Privacy Policy</a></li>
+          <li><a href="/terms/">Terms &amp; Conditions</a></li>
+          <li><a href="/refund-policy/">Refund Policy</a></li>
+          <li><a href="/digital-delivery-policy/">Digital Delivery</a></li>
+          <li><a href="/copyright-policy/">Copyright Policy</a></li>
         </ul>
       </div>
     </div>
@@ -243,6 +267,12 @@ function aa_footer_html() {
   },true);
   var burger=document.querySelector(".aa-burger"),mm=document.querySelector(".aa-mobile-menu");
   if(burger&&mm){burger.addEventListener("click",function(){mm.classList.toggle("open")})}
+  var sp0=new URLSearchParams(location.search),st0=(sp0.get("book")||sp0.get("s")||"").trim();
+  if(st0){
+    var tt=document.querySelector("[data-aa-bookshelf-title]"),ts=document.querySelector("[data-aa-bookshelf-sub]");
+    if(tt){tt.textContent="";var em=document.createElement("span");em.className="aa-grad";em.textContent="\u201C"+st0+"\u201D";tt.append("Results for ",em)}
+    if(ts){ts.textContent="Every ebook matching your search \u2014 instant PDF download, optimized for all devices."}
+  }
   fetch("/wp-json/wc/store/v1/products/categories?per_page=30")
     .then(function(r){return r.ok?r.json():Promise.reject()})
     .then(function(cats){
@@ -281,7 +311,8 @@ function aa_footer_html() {
     items.forEach(function(it){grid.appendChild(it)})})}
   var totalEl=document.querySelector("[data-aa-total]");
   if(totalEl){
-    var q=new URLSearchParams(location.search).get("book")||"";
+    var sp=new URLSearchParams(location.search);
+    var q=sp.get("book")||sp.get("s")||"";
     fetch("/wp-json/wc/store/v1/products?per_page=1"+(q?"&search="+encodeURIComponent(q):""))
       .then(function(r){var t=r.headers.get("X-WP-Total");return t===null?Promise.reject():t})
       .then(function(total){
@@ -291,10 +322,31 @@ function aa_footer_html() {
         totalEl.style.display="";
       }).catch(function(){});
   }
+  function toast(msg){var t=document.createElement("div");t.className="aa-toast";t.textContent=msg;document.body.appendChild(t);setTimeout(function(){t.classList.add("show")},20);setTimeout(function(){t.classList.remove("show");setTimeout(function(){t.remove()},300)},2600)}
+  window.aaToast=toast;
   var nf=document.querySelector("[data-aa-news]");
   if(nf){nf.addEventListener("submit",function(e){e.preventDefault();
-    var done=document.querySelector("[data-aa-news-done]");if(done){done.hidden=false}
-    var inp=nf.querySelector("input");if(inp){inp.value=""}})}
+    var inp=nf.querySelector("input[type=email]");var fd=new FormData();
+    fd.append("action","aa_newsletter_submit");fd.append("email",inp&&inp.value||"");
+    var hp=nf.querySelector("[name=aa_hp]");fd.append("hp",hp?hp.value:"");
+    fetch("/wp-admin/admin-ajax.php",{method:"POST",body:fd})
+      .then(function(r){return r.json()}).then(function(d){
+        var done=document.querySelector("[data-aa-news-done]"),err=document.querySelector("[data-aa-news-err]");
+        if(d&&d.status==="ok"){if(done)done.hidden=false;if(err)err.hidden=true;if(inp)inp.value="";toast("Subscribed \u2014 welcome aboard!")}
+        else{if(err){err.hidden=false;err.textContent=(d&&d.msg)||"Something went wrong. Please try again."}}
+      }).catch(function(){var done=document.querySelector("[data-aa-news-done]");if(done)done.hidden=false});
+  })}
+  document.addEventListener("click",function(e){
+    var b=e.target.closest?e.target.closest(".aa-wishbtn"):null;if(!b)return;
+    e.preventDefault();e.stopPropagation();
+    var fd=new FormData();fd.append("action","aa_wishlist_toggle");fd.append("id",b.getAttribute("data-id")||"");
+    fetch("/wp-admin/admin-ajax.php",{method:"POST",body:fd,credentials:"same-origin"})
+      .then(function(r){return r.json()})
+      .then(function(d){
+        if(d&&d.status==="login"){location.href="/my-account/?aa_wish=login";return}
+        if(d&&d.status==="ok"){b.classList.toggle("aa-on",d.on);toast(d.on?"Saved to your wishlist":"Removed from wishlist")}
+      }).catch(function(){});
+  },true);
 })();
   </script>
 </footer>';
@@ -622,7 +674,9 @@ $aa_newsletter = <<<'HTML'
         <h2>Get free sample chapters</h2>
         <p class="aa-news-sub">Join thousands of avid Indian readers. Receive curated weekly summaries, author interviews, and exclusive discounts straight to your inbox.</p>
         <p class="aa-news-done" data-aa-news-done hidden>You&rsquo;re on the list &mdash; check your inbox for a welcome note.</p>
+        <p class="aa-news-done" data-aa-news-err hidden style="color:#ff9d8a"></p>
         <form class="aa-news-form" data-aa-news>
+          <input type="text" name="aa_hp" value="" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;height:0;width:0;opacity:0">
           <div class="aa-news-field">
             <span class="aa-ms">alternate_email</span>
             <input type="email" name="email" placeholder="Enter your email address" required>
@@ -790,7 +844,7 @@ $shop_on  = '';
 $nav_home = str_replace( array( '%%HOME_ON%%', '%%SHOP_ON%%' ), array( $home_on, $shop_on ), '' );
 
 $home_sections = array(
-        $aa_common_html . aa_nav_html( 'aa-on', '' ),
+        $aa_common_html . aa_nav_html( 'home' ),
         $aa_hero,
         $aa_featured,
         $aa_categories,
@@ -800,7 +854,7 @@ $home_sections = array(
 );
 
 $shop_sections = array(
-        $aa_common_html . aa_nav_html( '', 'aa-on' ),
+        $aa_common_html . aa_nav_html( 'shop' ),
         $aa_shop_head,
         $aa_shop_toolbar,
         $aa_shop_grid,

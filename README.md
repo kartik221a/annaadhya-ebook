@@ -53,6 +53,30 @@ touching production.
 | `tools/test_webadmin.sh` | End-to-end test suite for the custom admin panel (19 checks) |
 | `site/wp-content/mu-plugins/aa-web-admin.php` | Custom admin panel — must-use plugin (see below) |
 
+## Storefront — the 10-page layout
+
+| # | Page | Route | Notes |
+|---|------|-------|-------|
+| 1 | Homepage | `/` | hero, featured grid, categories, newsletter |
+| 2 | Shop | `/shop/` | catalog with search, category chips, client-side sort, pagination |
+| 3 | Ebook details | `/product/<slug>/` | cover, price + save %, read-sample, reviews, related books |
+| 4 | Cart | `/cart/` | dark-themed Woo cart + totals |
+| 5 | Checkout | `/checkout/` | billing, UPI/Bank Transfer gateway, order review |
+| 6 | My Library | `/library/` | purchased PDFs with re-download, purchase history |
+| 7 | My Account | `/my-account/` | login/register, orders, downloads, addresses, **Wishlist** tab |
+| 8 | About | `/about/` | brand story, mission & vision, publishing philosophy, authors |
+| 9 | Contact & Support | `/contact/` | form (saved to admin "Messages"), support desk, FAQ accordion |
+| 10 | Legal | `/privacy-policy/` `/terms/` `/refund-policy/` `/digital-delivery-policy/` `/copyright-policy/` | plain-language policies with TL;DR cards |
+
+All pages render through the custom canvas shell (`aa_canvas_for_storefront()` in
+`aa-store-tweaks.php`): site search (`?s=`) reuses the Shop canvas, single products
+template through one hidden page (`[aa_product_single]`), and wishlist hearts live
+on every book card (stored per-user, shown in the My Account → Wishlist tab).
+Rebuild every page with:
+`wp eval 'require "tools/build_pages_v2.php";'` (**always with `--user=1`** —
+Elementor sanitizes `_elementor_data` for users without `unfiltered_html` and
+would strip the `<style>`/`<script>` tags from every widget).
+
 ## Custom admin panel — `/web-admin`
 
 No need to touch wp-admin for day-to-day work. Open **http://localhost:8080/web-admin**
@@ -66,7 +90,12 @@ WordPress' own wp-admin.
   description, Draft vs Published.
 - **Categories** — create / edit / delete product categories.
 - **Orders** — order list and detail view (items, totals, customer, status).
-- **Dashboard** — book/category/order counts, paid revenue, recent orders.
+- **Messages** — contact-form submissions from the Contact & Support page:
+  list, read, reply by email, delete. Unread count on the dashboard.
+- **Subscribers** — newsletter list (from the footer subscribe form), remove
+  entries, one-click CSV export for your mailing tool.
+- **Dashboard** — book/order counts, paid revenue, unread messages, subscriber
+  count, recent orders + messages, and quick links to every storefront page.
 
 The panel ships as a **must-use plugin** (`site/wp-content/mu-plugins/`) and
 routes through `template_redirect` on the raw request URI — no rewrite rules,

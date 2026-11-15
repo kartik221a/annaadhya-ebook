@@ -2,13 +2,13 @@
 /**
  * Plugin Name: Annaadhya Web Admin (must-use)
  * Description: Custom admin panel at /web-admin — manage books, categories and orders without wp-admin. Ships as a must-use plugin (always active) and routes through template_redirect, so it needs no rewrite rules and no database state: it works identically on every checkout of this repo.
- * Version:     1.1.0
+ * Version:     1.2.0
  * Author:      Annaadhya
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'AA_ADMIN_VER', '1.1.0' );
+define( 'AA_ADMIN_VER', '1.2.0' );
 define( 'AA_ADMIN_BASE', '/web-admin' );
 define( 'AA_ADMIN_ASSETS', WPMU_PLUGIN_URL . '/aa-web-admin/assets' );
 
@@ -18,6 +18,8 @@ require_once __DIR__ . '/aa-web-admin/dashboard.php';
 require_once __DIR__ . '/aa-web-admin/products.php';
 require_once __DIR__ . '/aa-web-admin/categories.php';
 require_once __DIR__ . '/aa-web-admin/orders.php';
+require_once __DIR__ . '/aa-web-admin/messages.php';
+require_once __DIR__ . '/aa-web-admin/subscribers.php';
 
 /** Panel URL builder: /web-admin, /web-admin/products/5/edit, ... */
 function aa_admin_url( $path = '' ) {
@@ -35,6 +37,9 @@ function aa_admin_flash() {
                 'category_created' => array( 'Category created.', 'ok' ),
                 'category_updated' => array( 'Category updated.', 'ok' ),
                 'category_deleted' => array( 'Category deleted.', 'ok' ),
+                'message_deleted'  => array( 'Message deleted.', 'ok' ),
+                'message_updated'  => array( 'Message marked as handled.', 'ok' ),
+                'subscriber_removed' => array( 'Subscriber removed.', 'ok' ),
                 'error'            => array( 'Something went wrong — check the form and try again.', 'err' ),
                 'login_failed'     => array( 'Wrong username or password. Try again.', 'err' ),
                 'denied'           => array( 'Action blocked: invalid or expired security token.', 'err' ),
@@ -117,6 +122,12 @@ function aa_admin_panel( $path ) {
                         break;
                 case 'orders':
                         aa_admin_orders_router( $sub );
+                        break;
+                case 'messages':
+                        aa_admin_messages_router( $sub );
+                        break;
+                case 'subscribers':
+                        aa_admin_subscribers_router();
                         break;
                 default:
                         aa_admin_not_found();
