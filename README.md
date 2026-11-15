@@ -90,11 +90,20 @@ and runs 19 checks: login, redirect, CRUD, uploads, storefront integrity).
   (`site/wp-content/uploads/...`) and a sample PDF delivered as the secure download
   file (`site/wp-content/uploads/woocommerce_uploads/`)
 - Theme: **Astra** (free, WooCommerce-friendly)
-- Page builder: **Elementor Free** (nothing paid) — the Home page is built as a real
-  Elementor page: each section is an editable "HTML" widget with self-contained
-  HTML/CSS, plus native WooCommerce `[products]` shortcodes so the featured grid
-  always stays in sync with the store. Rebuild it anytime with:
-  `wp eval-file tools/set_elementor_home.php`
+- Page builder: **Elementor Free** (nothing paid) — Home and Shop are real Elementor
+  pages: each section is an editable "HTML" widget with self-contained HTML/CSS,
+  plus the custom `[aa_books]` shortcode (mu-plugin `aa-store-tweaks.php`) which
+  renders the book cards from live WooCommerce data. Rebuild both pages anytime with:
+  `wp eval-file tools/set_stitch_pages.php` (legacy build: `tools/set_elementor_home.php`)
+- **Design source: Google Stitch** — the current storefront design ("Obsidian & Gold
+  Lit": dark `#0b0f14` surfaces, amber `#f59e0b` accent, Plus Jakarta Sans, Material
+  Symbols) was generated with the Stitch MCP (project `7746485506472124034`, screens:
+  home `e14436a8...`, shop `ba9c7f19...`) and ported 1:1 into the Elementor sections.
+  New design iterations can be generated with `scripts/stitch_mcp.py` (needs a
+  Stitch API key in `scripts/stitch.key`, never committed).
+- The front page and the shop page render through a custom canvas shell
+  (`aa_render_canvas()` in `aa-store-tweaks.php`) so Astra/Woo archive chrome is
+  fully replaced — product/category/cart pages still use the classic templates.
 
 The 6 products and all copy are **demo placeholders** so you can test the complete
 flow: browse → add to cart → checkout → instant PDF download. Replace products,
