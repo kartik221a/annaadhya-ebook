@@ -49,6 +49,7 @@ touching production.
 | `router.php` | Runner for the no-Docker PHP built-in server option |
 | `tools/build_content.sh` | wp-cli script that generated pages, menu, products |
 | `tools/make_samples.py` | Python script that generated the sample covers + PDFs |
+| `tools/set_elementor_home.php` | wp-cli script that builds the Home page as an Elementor page |
 
 ## Store configuration (already done)
 
@@ -60,6 +61,11 @@ touching production.
   (`site/wp-content/uploads/...`) and a sample PDF delivered as the secure download
   file (`site/wp-content/uploads/woocommerce_uploads/`)
 - Theme: **Astra** (free, WooCommerce-friendly)
+- Page builder: **Elementor Free** (nothing paid) — the Home page is built as a real
+  Elementor page: each section is an editable "HTML" widget with self-contained
+  HTML/CSS, plus native WooCommerce `[products]` shortcodes so the featured grid
+  always stays in sync with the store. Rebuild it anytime with:
+  `wp eval-file tools/set_elementor_home.php`
 
 The 6 products and all copy are **demo placeholders** so you can test the complete
 flow: browse → add to cart → checkout → instant PDF download. Replace products,
