@@ -7,8 +7,9 @@ services:
     volumes:
       - ./site:/var/www/html
       - ./docker/apache.conf:/etc/apache2/sites-available/000-default.conf:ro
-    # WordPress needs write access to wp-content (SQLite DB + uploads).
+    # a2enmod rewrite: the php:8.3-apache image ships mod_rewrite DISABLED.
+    # Without it, every pretty permalink (/shop/ etc.) returns Apache 404.
     # chmod makes the bind mount writable for the container user on any host OS.
     command: >
-      bash -c "chmod -R a+rwX /var/www/html/wp-content && exec apache2-foreground"
+      bash -c "a2enmod rewrite && chmod -R a+rwX /var/www/html/wp-content && exec apache2-foreground"
     restart: unless-stopped
