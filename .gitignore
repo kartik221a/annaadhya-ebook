@@ -1,0 +1,4 @@
+# OS junk only - the whole site (including the SQLite database and uploads)
+# is intentionally tracked so that `git pull` always gives you the full site.
+.DS_Store
+Thumbs.db
