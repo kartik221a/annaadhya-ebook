@@ -50,6 +50,25 @@ touching production.
 | `tools/build_content.sh` | wp-cli script that generated pages, menu, products |
 | `tools/make_samples.py` | Python script that generated the sample covers + PDFs |
 | `tools/set_elementor_home.php` | wp-cli script that builds the Home page as an Elementor page |
+| `site/wp-content/plugins/annaadhya-admin/` | Custom admin panel plugin (see below) |
+
+## Custom admin panel — `/admin`
+
+No need to touch wp-admin for day-to-day work. Open **http://localhost:8080/admin**
+and sign in with your WordPress account (locally: `kartik` / `Annaadhya!2026`).
+
+- **Books** — list / search / create / edit / delete. Upload a cover image and the
+  PDF directly (PDF is stored in the protected `woocommerce_uploads` folder and
+  delivered automatically after checkout). Price + sale price, categories,
+  description, Draft vs Published.
+- **Categories** — create / edit / delete product categories.
+- **Orders** — order list and detail view (items, totals, customer, status).
+- **Dashboard** — book/category/order counts, paid revenue, recent orders.
+
+The panel is a self-contained WordPress plugin (`annaadhya-admin`): custom routes
+via rewrite rules, WP-session auth (users with `manage_woocommerce` only), nonces
+on every action, no external dependencies. Deactivate it any time to get the
+default WordPress behaviour back.
 
 ## Store configuration (already done)
 
