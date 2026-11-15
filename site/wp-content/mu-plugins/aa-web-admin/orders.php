@@ -5,8 +5,10 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-function aa_admin_orders_router() {
-	$sub = get_query_var( 'aa_sub' );
+/**
+ * @param string $sub '' | '<order-id>'
+ */
+function aa_admin_orders_router( $sub = '' ) {
 	if ( $sub && absint( $sub ) ) {
 		aa_admin_order_detail( absint( $sub ) );
 		return;

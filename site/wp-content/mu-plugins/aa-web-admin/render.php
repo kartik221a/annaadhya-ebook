@@ -6,7 +6,7 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 function aa_admin_assets_url( $file ) {
-	return plugins_url( 'assets/' . $file, AA_ADMIN_DIR . 'annaadhya-admin.php' );
+	return AA_ADMIN_ASSETS . '/' . $file;
 }
 
 function aa_admin_head() {

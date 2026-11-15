@@ -50,12 +50,15 @@ touching production.
 | `tools/build_content.sh` | wp-cli script that generated pages, menu, products |
 | `tools/make_samples.py` | Python script that generated the sample covers + PDFs |
 | `tools/set_elementor_home.php` | wp-cli script that builds the Home page as an Elementor page |
-| `site/wp-content/plugins/annaadhya-admin/` | Custom admin panel plugin (see below) |
+| `tools/test_webadmin.sh` | End-to-end test suite for the custom admin panel (19 checks) |
+| `site/wp-content/mu-plugins/aa-web-admin.php` | Custom admin panel — must-use plugin (see below) |
 
-## Custom admin panel — `/admin`
+## Custom admin panel — `/web-admin`
 
-No need to touch wp-admin for day-to-day work. Open **http://localhost:8080/admin**
+No need to touch wp-admin for day-to-day work. Open **http://localhost:8080/web-admin**
 and sign in with your WordPress account (locally: `kartik` / `Annaadhya!2026`).
+The old `/admin` address also works — it redirects to `/web-admin` instead of
+WordPress' own wp-admin.
 
 - **Books** — list / search / create / edit / delete. Upload a cover image and the
   PDF directly (PDF is stored in the protected `woocommerce_uploads` folder and
@@ -65,10 +68,17 @@ and sign in with your WordPress account (locally: `kartik` / `Annaadhya!2026`).
 - **Orders** — order list and detail view (items, totals, customer, status).
 - **Dashboard** — book/category/order counts, paid revenue, recent orders.
 
-The panel is a self-contained WordPress plugin (`annaadhya-admin`): custom routes
-via rewrite rules, WP-session auth (users with `manage_woocommerce` only), nonces
-on every action, no external dependencies. Deactivate it any time to get the
-default WordPress behaviour back.
+The panel ships as a **must-use plugin** (`site/wp-content/mu-plugins/`) and
+routes through `template_redirect` on the raw request URI — no rewrite rules,
+no `flush_rewrite_rules()`, no "is the plugin active" database row. That means
+it works identically after every `git pull`, even if your local database has
+drifted from the repo (the reason `/admin` used to bounce to wp-admin).
+Auth is WordPress-native: any user with `manage_woocommerce` (admins qualify),
+a login form powered by `wp_signon`, and a nonce on every action. No external
+dependencies. To uninstall, delete the `mu-plugins/aa-web-admin*` files.
+
+Test it any time with `bash tools/test_webadmin.sh` (boots a temporary server
+and runs 19 checks: login, redirect, CRUD, uploads, storefront integrity).
 
 ## Store configuration (already done)
 
