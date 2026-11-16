@@ -14,7 +14,9 @@ docker compose up
 Then open **http://localhost:8080** in your browser. That's it — no database setup,
 no MySQL, no config. The stack is WordPress running on SQLite via the official
 [SQLite Database Integration](https://wordpress.org/plugins/sqlite-database-integration/)
-plugin.
+plugin. **The site is host-portable**: URLs follow whatever hostname you open it
+with (localhost, a LAN IP, a tunnel or the real domain), so `/web-admin`, links
+and assets always resolve — no search-replace needed when the domain changes.
 
 Stop with `Ctrl+C`. To rebuild after pulling changes: `git pull && docker compose up`.
 
@@ -70,11 +72,22 @@ touching production.
 
 All pages render through the custom canvas shell (`aa_canvas_for_storefront()` in
 `aa-store-tweaks.php`): site search (`?s=`) reuses the Shop canvas, single products
-template through one hidden page (`[aa_product_single]`), and wishlist hearts live
+template through one hidden page (`[aa_product_single]`), wishlist hearts live
 on every book card (stored per-user, shown in the My Account → Wishlist tab).
+**Every category archive renders through a hidden "Category Archive" page** too:
+`[aa_category_hero]` prints a Stitch hero per category — Technology's terminal
+window, Business's playbook-metrics chart, Self-Help's focus rings, Fiction's
+mountain-and-book vignette (ported 1:1 from the four Stitch category screens,
+project `7746485506472124034`) — and `[aa_books]` automatically follows the
+queried category, so new categories get the same design out of the box.
 Rebuild every page with:
-`wp eval 'require "tools/build_pages_v2.php";'` (v3 subset for auth/library/checkout/delivery-policy:
-`tools/build_pages_v3.php`). The builders impersonate an admin automatically —
+`wp eval 'require "tools/build_pages_v2.php";'`
+(v3 subset for auth/library/checkout/delivery-policy: `wp eval 'require "tools/build_pages_v3.php";'`;
+category pages: `wp eval 'require "tools/build_category_pages.php";'`;
+home+shop only: `wp eval 'require "tools/set_stitch_pages.php";'` — all of them
+pull in `tools/stitch_lib.php`, the shared token/nav/footer library).
+The builders impersonate an
+admin automatically —
 Elementor sanitizes `_elementor_data` for users without `unfiltered_html` (e.g. plain
 `wp eval` as user 0) and would strip the `<style>`/`<script>` tags from every widget.
 
@@ -91,19 +104,50 @@ Elementor sanitizes `_elementor_data` for users without `unfiltered_html` (e.g. 
 - Checkout asks for **name + email only** (no address fields, no order notes).
 - The order-received screen has a gold **“Open My Library to download”** CTA.
 
-## Sign-in options (Google + email/password)
+## Sign-in options (Google + email/password + verified emails)
 
 - `/my-account/` renders a Stitch-designed auth card: **Continue with Google** pill,
   “or continue with email” divider, sign-in + register tabs (AJAX, nonce-guarded).
-- Google sign-in is powered by the **Nextend Social Login** plugin (bundled in
-  `wp-content/plugins/nextend-facebook-connect`). It goes live the moment the Google
-  provider has real OAuth credentials: create an OAuth 2.0 Client in Google Cloud
-  Console (type *Web application*), then in **wp-admin → Nextend Social Login → Google**
-  paste the Client ID + Secret (NSL shows the exact Authorized redirect URI to register)
-  and enable the provider. Until then the storefront button shows a friendly
-  “use email meanwhile” toast instead of a broken flow.
-- Email/password registration is open (min 8 chars); accounts get the Woo `customer`
-  role.
+- **Every email/password sign-up now receives a confirmation email** (branded
+  dark/gold). The account can browse immediately; **downloads stay locked until
+  the address is verified** — Library and My Account show an amber
+  “Verify your email to unlock downloads” banner with a resend button, and a
+  download attempt before verification redirects to the library with that banner.
+  `/verify-email/?uid=&key=` is the one-click confirmation (and signs you in).
+- **Google sign-in without Google Cloud Console**: `aa-auth-plus.php` implements
+  a minimal OAuth2/OIDC client configured through `wp-config.php` constants —
+  either Google's free OAuth client (creating an OAuth 2.0 Client ID is free,
+  no billing account needed) or any OIDC provider:
+  ```php
+  // Option A — native Google:
+  define( 'AA_GOOGLE_CLIENT_ID', '...apps.googleusercontent.com' );
+  define( 'AA_GOOGLE_CLIENT_SECRET', '...' );
+  // Option B — any OpenID Connect provider (discovery-based), e.g. a free
+  // Auth0 tenant (25k MAU free, ships its own Google dev keys — zero Google
+  // Cloud Console work). Allowed callback URL: https://<host>/oauth/callback
+  define( 'AA_OAUTH_ISSUER', 'https://your-tenant.eu.auth0.com/' );
+  define( 'AA_OAUTH_CLIENT_ID', '...' );
+  define( 'AA_OAUTH_CLIENT_SECRET', '...' );
+  ```
+  The callback URL to register is `<home_url>/oauth/callback`; the sign-in
+  route is `/oauth/start`. OAuth users are email-verified automatically.
+  Until constants are set the Google button shows a friendly toast instead of
+  a broken flow, and email sign-in keeps working.
+- **Outgoing email needs SMTP** (the PHP `mail()` fallback rarely works on
+  dev/cheap hosts). Free options that work with the bundled `AA_SMTP_*`
+  constants: **Brevo** (300 mails/day free, no card) or a Gmail app password.
+  ```php
+  define( 'AA_SMTP_HOST', 'smtp-relay.brevo.com' );
+  define( 'AA_SMTP_PORT', 587 );
+  define( 'AA_SMTP_USER', '...' );  define( 'AA_SMTP_PASS', '...' );
+  define( 'AA_SMTP_SECURE', 'tls' );
+  define( 'AA_SMTP_FROM', 'store@yourdomain.com' );
+  define( 'AA_SMTP_FROM_NAME', 'Annaadhya Ebooks' );
+  ```
+  While SMTP is missing the register card says so plainly, and **web-admin →
+  Downloads → “Verify email”** lets you verify a customer manually.
+- Email/password registration is open (min 8 chars); accounts get the Woo
+  `customer` role. `wp-login.php` (lost-password flow) is branded dark/gold.
 
 ## Custom admin panel — `/web-admin`
 

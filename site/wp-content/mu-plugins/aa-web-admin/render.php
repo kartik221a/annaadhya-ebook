@@ -6,7 +6,7 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 function aa_admin_assets_url( $file ) {
-        return AA_ADMIN_ASSETS . '/' . $file;
+        return aa_admin_asset( $file ); // host-portable (see aa-web-admin.php)
 }
 
 function aa_admin_head() {

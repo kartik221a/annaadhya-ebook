@@ -10,7 +10,15 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 define( 'AA_ADMIN_VER', '1.3.0' );
 define( 'AA_ADMIN_BASE', '/web-admin' );
-define( 'AA_ADMIN_ASSETS', WPMU_PLUGIN_URL . '/aa-web-admin/assets' );
+// Asset base is built at runtime through home_url() so it follows the incoming
+// host (see aa_portable_url()) — WPMU_PLUGIN_URL is a constant frozen before
+// mu-plugins load and would keep a stale host on LAN/tunnel deployments.
+
+/** Asset URL inside the panel's assets folder. */
+function aa_admin_asset( $file = '' ) {
+        $base = untrailingslashit( home_url( '/wp-content/mu-plugins/aa-web-admin/assets' ) );
+        return $base . ( $file ? '/' . ltrim( $file, '/' ) : '' );
+}
 
 require_once __DIR__ . '/aa-web-admin/auth.php';
 require_once __DIR__ . '/aa-web-admin/render.php';
@@ -44,6 +52,7 @@ function aa_admin_flash() {
                 'dl_reset'           => array( 'Download counter reset to 5.', 'ok' ),
                 'dl_grant'           => array( '5 extra downloads granted.', 'ok' ),
                 'dl_unlimited'       => array( 'That grant is unlimited — nothing to top up.', 'ok' ),
+                'dl_verified'        => array( 'Email verified — downloads unlocked for that customer.', 'ok' ),
                 'error'            => array( 'Something went wrong — check the form and try again.', 'err' ),
                 'login_failed'     => array( 'Wrong username or password. Try again.', 'err' ),
                 'denied'           => array( 'Action blocked: invalid or expired security token.', 'err' ),

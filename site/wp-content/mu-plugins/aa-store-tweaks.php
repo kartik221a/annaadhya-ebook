@@ -9,6 +9,29 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 /* ------------------------------------------------------------------------
+ * Portable URLs — the same repo runs untouched on localhost:8080, a LAN IP,
+ * a preview tunnel or a production domain. scheme://host follows the incoming
+ * request whenever the request host differs from the configured site URL.
+ * This is what keeps /web-admin (and every storefront link) reachable no
+ * matter how the store is opened.
+ * ---------------------------------------------------------------------- */
+if ( isset( $_SERVER['HTTP_X_FORWARDED_PROTO'] ) && 'https' === strtolower( $_SERVER['HTTP_X_FORWARDED_PROTO'] ) ) {
+        $_SERVER['HTTPS'] = 'on'; // trust the edge proxy's TLS flag for is_ssl()
+}
+
+add_filter( 'pre_option_home', 'aa_portable_url' );
+add_filter( 'pre_option_siteurl', 'aa_portable_url' );
+
+function aa_portable_url( $value ) {
+        if ( wp_installing() || ( defined( 'WP_CLI' ) && WP_CLI ) ) { return $value; }
+        if ( empty( $_SERVER['HTTP_HOST'] ) ) { return $value; } // wp-cli / cron without host
+        $host = (string) $_SERVER['HTTP_HOST'];
+        if ( ! preg_match( '/^[a-z0-9.\-]+(:[0-9]{1,5})?$/i', $host ) ) { return $value; }
+        $scheme = is_ssl() ? 'https' : 'http';
+        return $scheme . '://' . $host;
+}
+
+/* ------------------------------------------------------------------------
  * Canvas renderer
  *
  * Storefront pages are authored as self-contained Elementor "html" widgets
@@ -59,6 +82,17 @@ function aa_canvas_for_storefront( $tpl ) {
                 if ( $pd > 0 && is_product() ) {
                         $GLOBALS['aa_current_product'] = get_queried_object_id();
                         aa_render_canvas( $pd );
+                }
+
+                // Every product-category archive renders through one hidden template
+                // page: the Stitch hero comes from [aa_category_hero], the grid from
+                // [aa_books] (both read the queried term).
+                if ( is_product_category() ) {
+                        $catpage = (int) get_option( 'aa_category_page', 0 );
+                        if ( $catpage > 0 ) {
+                                $GLOBALS['aa_current_cat'] = get_queried_object();
+                                aa_render_canvas( $catpage );
+                        }
                 }
         }
 
@@ -222,6 +256,14 @@ function aa_books_shortcode( $atts ) {
                                 'terms'    => array_map( 'trim', explode( ',', $a['category'] ) ),
                         ),
                 );
+        } elseif ( function_exists( 'is_product_category' ) && is_product_category() ) {
+                // Category archive: the [aa_books] grid follows the queried term.
+                $term = get_queried_object();
+                if ( $term && isset( $term->taxonomy ) && 'product_cat' === $term->taxonomy ) {
+                        $args['tax_query'] = array(
+                                array( 'taxonomy' => 'product_cat', 'field' => 'slug', 'terms' => array( $term->slug ) ),
+                        );
+                }
         }
 
         $exclude = array_filter( array_map( 'absint', explode( ',', $a['exclude'] ) ) );
@@ -268,6 +310,143 @@ function aa_books_shortcode( $atts ) {
 
         $html .= '</div>';
         return $html;
+}
+
+/* ------------------------------------------------------------------------
+ * [aa_category_hero] — Stitch category hero for the queried product_cat term.
+ * One motif panel per category (ported 1:1 from the four Stitch category
+ * screens), dynamic title/description/count from the term + term meta.
+ * ---------------------------------------------------------------------- */
+
+add_shortcode( 'aa_category_hero', 'aa_category_hero_shortcode' );
+
+function aa_category_hero_shortcode( $atts ) {
+        $term = $GLOBALS['aa_current_cat'] ?? null;
+        if ( ! $term || empty( $term->taxonomy ) || 'product_cat' !== $term->taxonomy ) {
+                return '';
+        }
+
+        $slug = $term->slug;
+        $name = $term->name;
+
+        // Per-slug copy (fallback when the term description is empty) + motif id.
+        $copy = array(
+                'technology' => array(
+                        'sub'   => 'AI, WordPress and the craft of shipping digital products — practical, battle-tested guides for indie builders and software engineers.',
+                        'motif' => 'technology',
+                ),
+                'business'   => array(
+                        'sub'   => 'Lean side hustles, product launches and the playbooks that actually pay — field notes for founders and operators.',
+                        'motif' => 'business',
+                ),
+                'self-help'  => array(
+                        'sub'   => 'Attention, discipline and calm — honest systems for doing deep work in a noisy world.',
+                        'motif' => 'selfhelp',
+                ),
+                'fiction'    => array(
+                        'sub'   => 'Stories that travel — from Himalayan trails to far shores and quiet rooms, told by voices worth staying up for.',
+                        'motif' => 'fiction',
+                ),
+        );
+        $c      = isset( $copy[ $slug ] ) ? $copy[ $slug ] : array( 'sub' => 'Curated ebooks for instant PDF download.', 'motif' => 'technology' );
+        $sub    = trim( (string) $term->description );
+        if ( '' === $sub ) { $sub = $c['sub']; }
+
+        $count  = (int) $term->count;
+        $nword  = $count . ( 1 === $count ? ' ebook' : ' ebooks' );
+
+        // Gold-accent the last word of the headline, like the Stitch screens.
+        $words  = explode( ' ', $name );
+        $last   = array_pop( $words );
+        $h1     = esc_html( implode( ' ', $words ) );
+        if ( '' !== $h1 ) { $h1 .= ' '; }
+        $h1    .= '<span class="aa-cath-gold">' . esc_html( $last ) . '</span>';
+
+        $motif = aa_category_motif( $c['motif'], $nword, $slug );
+
+        return '<section class="aa-cath"><div class="aa-wrap"><div class="aa-cath-band">'
+                . '<div class="aa-cath-glow" aria-hidden="true"></div>'
+                . '<div class="aa-cath-grid">'
+                . '<div class="aa-cath-copy">'
+                . '<nav class="aa-cath-crumb"><a href="/">Home</a><span>/</span><a href="/shop/">Store</a><span>/</span><em>' . esc_html( $name ) . '</em></nav>'
+                . '<div class="aa-cath-eyebrow"><span class="aa-ms">auto_awesome</span><span>CURATED COLLECTION</span></div>'
+                . '<h1>' . $h1 . '</h1>'
+                . '<p class="aa-cath-sub">' . esc_html( $sub ) . '</p>'
+                . '<div class="aa-cath-pills">'
+                . '<span class="aa-cath-pill"><span class="aa-ms">menu_book</span>' . esc_html( $nword ) . '</span>'
+                . '<span class="aa-cath-pill"><span class="aa-ms">bolt</span>Instant PDF delivery</span>'
+                . '<span class="aa-cath-pill"><span class="aa-ms">devices</span>Read on any device</span>'
+                . '</div>'
+                . '<a class="aa-btn-ghost aa-cath-cta" href="#aa-catgrid"><span>Browse all titles</span><span class="aa-ms">arrow_forward</span></a>'
+                . '</div>'
+                . '<div class="aa-cath-art">' . $motif . '</div>'
+                . '</div></div></div></section>';
+}
+
+/** Per-category motif panel (right side of the hero), ported from Stitch. */
+function aa_category_motif( $motif, $nword, $slug ) {
+        $cap = '<div class="aa-motif-top"><span class="aa-motif-dots"><i></i><i class="g"></i><i class="s"></i></span>';
+        switch ( $motif ) {
+                case 'business':
+                        return $cap . '<span class="aa-motif-caps">EXEC_PLAYBOOK_METRICS.INR</span></div>'
+                                . '<div class="aa-motif-body">'
+                                . '<div class="aa-biz-stat"><span class="aa-biz-ic"><span class="aa-ms">rocket_launch</span></span>'
+                                . '<span class="aa-biz-stat-tx"><em>Median Bootstrapped Launch</em><strong>&#8377;2.4L / Month Run Rate</strong></span>'
+                                . '<span class="aa-biz-badge">+48% MoM</span></div>'
+                                . '<div class="aa-biz-chart"><div class="aa-biz-chart-h"><span>CAPITAL EFFICIENCY INDEX</span><b>98.4% ROI</b></div>'
+                                . '<div class="aa-biz-bars"><i style="height:30%"></i><i style="height:45%"></i><i style="height:40%"></i><i style="height:65%"></i><i style="height:80%"></i><i class="hot" style="height:95%"></i></div></div>'
+                                . '<div class="aa-biz-strip"><span><span class="aa-ms">verified</span> Founder-tested playbooks</span><span><span class="aa-ms">payments</span> UPI ready</span></div>'
+                                . '</div>';
+                case 'selfhelp':
+                        return '<div class="aa-sh-wrap">'
+                                . '<div class="aa-sh-halo" aria-hidden="true"></div>'
+                                . $cap . '<span class="aa-motif-caps">FOCUS_DISCIPLINE_METRICS</span><i class="aa-sh-live"></i></div>'
+                                . '<div class="aa-sh-art">'
+                                . '<i class="aa-ring r1" aria-hidden="true"></i><i class="aa-ring r2" aria-hidden="true"></i><i class="aa-ring r3" aria-hidden="true"></i><i class="aa-ring r4" aria-hidden="true"></i>'
+                                . '<svg class="aa-sh-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+                                . '<path d="M50 20C54.4 20 58 16.4 58 12C58 7.6 54.4 4 50 4C45.6 4 42 7.6 42 12C42 16.4 45.6 20 50 20Z" fill="currentColor" fill-opacity=".85"/>'
+                                . '<path d="M50 24C41 24 35 29 32 37L28 47C26 52 29 57 34 57H66C71 57 74 52 72 47L68 37C65 29 59 24 50 24Z" fill="currentColor" fill-opacity=".4"/>'
+                                . '<path d="M22 68C22 61 27 57 33 57H67C73 57 78 61 78 68C78 74 72 80 62 82L66 90H34L38 82C28 80 22 74 22 68Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>'
+                                . '<path d="M50 86C50 86 52 76 60 76C68 76 66 86 66 86C66 86 58 87 50 86Z" fill="#ffc174" fill-opacity=".3"/>'
+                                . '</svg>'
+                                . '</div>'
+                                . '<div class="aa-sh-stats"><div><em>Deep-work sessions</em><strong>2h 40m avg</strong></div><div><em>Focus streak</em><strong>' . esc_html( $nword ) . '</strong></div></div>'
+                                . '</div>';
+                case 'fiction':
+                        return '<div class="aa-fic-wrap">'
+                                . $cap . '<span class="aa-motif-caps">LITERARY_JOURNEYS.INR</span><span class="aa-fic-ed">EDITION 2026</span></div>'
+                                . '<div class="aa-fic-art">'
+                                . '<svg class="aa-fic-svg" viewBox="0 0 400 180" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" aria-hidden="true">'
+                                . '<path d="M-20 180L80 90L160 140L240 60L340 150L420 100V180H-20Z" fill="#181c21" stroke="#ffc174" stroke-opacity=".3" stroke-width=".75"/>'
+                                . '<path d="M40 180L140 110L220 150L300 80L380 180H40Z" fill="#121820" stroke="#f59e0b" stroke-opacity=".5" stroke-width=".75"/>'
+                                . '<circle cx="320" cy="40" fill="#ffc174" fill-opacity=".15" r="14"/>'
+                                . '<path d="M326 30C320 33 316 38 316 46C316 54 322 59 328 61C320 62 312 55 312 46C312 37 319 31 326 30Z" fill="#ffc174"/>'
+                                . '<circle cx="120" cy="45" fill="#ffddb8" r="1.5"/><circle cx="200" cy="35" fill="#ffddb8" r="1"/><circle cx="260" cy="55" fill="#ffddb8" r="1"/>'
+                                . '<path d="M120 180C140 160 180 150 190 135C200 120 220 115 240 60" stroke="#f59e0b" stroke-dasharray="3 3" stroke-opacity=".8" stroke-width="1.2"/>'
+                                . '</svg>'
+                                . '<div class="aa-fic-node"><span class="aa-ms">auto_stories</span></div>'
+                                . '</div>'
+                                . '<div class="aa-fic-stats"><div><em>Bedtime picks</em><strong>' . esc_html( $nword ) . '</strong></div><div><em>Avg. read time</em><strong>4h 12m</strong></div></div>'
+                                . '</div>';
+                default: // technology — terminal window
+                        return $cap . '<span class="aa-motif-caps">annaadhya-kernel :: v2.6.0</span><span class="aa-ms aa-motif-ti">terminal</span></div>'
+                                . '<div class="aa-term">'
+                                . '<div class="aa-term-line"><span class="aa-term-p">$</span><span>fetch --category "' . esc_html( $slug ) . '" --store annaadhya</span></div>'
+                                . '<div class="aa-term-out"><p class="g">&gt; Found ' . esc_html( $nword ) . ' verified technical masterworks</p><p>&gt; Formats: PDF (DRM-Free) + EPUB + Code Kits</p><p>&gt; Currency: INR (&#8377;) Instant UPI enabled</p></div>'
+                                . '<div class="aa-term-foot"><span class="aa-term-tag"><span class="aa-ms">code</span><b>&lt;Build / Ship / Scale&gt;</b></span><span class="aa-term-chip">100% WATERMARKED</span></div>'
+                                . '<div class="aa-term-strip"><span><span class="aa-ms">verified</span> Authentic Indian Authors</span><span><span class="aa-ms">bolt</span> Lifetime updates</span></div>'
+                                . '</div>';
+        }
+}
+
+/** [aa_category_count] — "Showing N ebooks" for the category toolbar. */
+add_shortcode( 'aa_category_count', 'aa_category_count_shortcode' );
+
+function aa_category_count_shortcode( $atts ) {
+        $term = $GLOBALS['aa_current_cat'] ?? null;
+        if ( ! $term || empty( $term->taxonomy ) || 'product_cat' !== $term->taxonomy ) { return ''; }
+        $n = (int) $term->count;
+        return '<span class="aa-showing">Showing <strong>' . esc_html( $n ) . '</strong> ' . ( 1 === $n ? 'ebook' : 'ebooks' ) . '</span>';
 }
 
 /** Wishlist ids for the current user (empty array when guest). */
@@ -477,8 +656,8 @@ function aa_auth_shortcode() {
         if ( is_user_logged_in() ) { return aa_profile_dashboard_html(); }
 
         $nonce  = wp_create_nonce( 'aa_auth' );
-        $google = aa_auth_google_active();
-        $g_url  = $google ? esc_url( site_url( '/wp-login.php?loginSocial=google&redirect_to=' . urlencode( home_url( '/library/' ) ) ) ) : '';
+        $google = function_exists( 'aa_oauth_active' ) ? aa_oauth_active() : aa_auth_google_active();
+        $g_url  = $google ? esc_url( home_url( '/oauth/start?redirect_to=' . urlencode( home_url( '/library/' ) ) ) ) : '';
 
         ob_start();
         ?>
@@ -508,6 +687,10 @@ function aa_auth_shortcode() {
 .aa-auth-pane[hidden]{display:none}
 .aa-auth-err{display:none;background:rgba(255,77,77,.08);border:1px solid rgba(255,77,77,.35);color:#ff8a80;border-radius:10px;padding:11px 14px;font-size:13px;margin-bottom:16px}
 .aa-auth-err.aa-show{display:block}
+.aa-verify-ic{width:64px;height:64px;border-radius:50%;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);display:flex;align-items:center;justify-content:center;margin:6px auto 18px}
+.aa-verify-ic .aa-ms{font-size:32px;color:var(--aa-goldbg)}
+.aa-auth-continue{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:14px;background:var(--aa-cont);border:1px solid var(--aa-line2);color:var(--aa-tx)!important;font-weight:600;font-size:14px;padding:13px 18px;border-radius:10px;text-decoration:none!important}
+.aa-auth-continue:hover{border-color:var(--aa-gold);color:var(--aa-gold)!important}
 .aa-toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:var(--aa-high);color:var(--aa-tx);border:1px solid var(--aa-line);border-radius:12px;padding:13px 20px;font-size:13.5px;z-index:9999;box-shadow:0 12px 40px rgba(0,0,0,.5);display:none;max-width:88vw;text-align:center}
 @media(max-width:560px){.aa-auth-card{padding:26px 20px}}
 </style>
@@ -554,6 +737,16 @@ function aa_auth_shortcode() {
                 </form>
                 <p class="aa-auth-fine">By creating an account you agree to our <a href="/terms/">Terms</a> and <a href="/privacy-policy/">Privacy Policy</a>.</p>
         </div>
+
+        <div class="aa-auth-pane" data-aa-pane="verify" hidden>
+                <div class="aa-verify-ic"><span class="aa-ms">mark_email_read</span></div>
+                <h3 style="color:var(--aa-tx);font-size:19px;margin:0 0 10px;text-align:center">Check your inbox</h3>
+                <p class="aa-auth-sub" style="text-align:center">We sent a confirmation link to <strong style="color:var(--aa-gold)" data-aa-vemail></strong>. Click it once to verify your email — that unlocks ebook downloads in your account.</p>
+                <p class="aa-auth-sub" data-aa-vmail style="display:none;background:rgba(255,180,80,.08);border:1px solid rgba(245,158,11,.35);border-radius:10px;padding:11px 14px;color:var(--aa-warm)"></p>
+                <button class="aa-auth-btn" type="button" data-aa-resend><span class="aa-ms">forward_to_inbox</span><span>Resend confirmation email</span></button>
+                <p style="text-align:center;margin:12px 0 0"><span data-aa-resend-note style="font-size:12.5px;color:var(--aa-dim)"></span></p>
+                <a class="aa-auth-continue" href="/library/"><span>Continue to the store &rarr;</span></a>
+        </div>
 </div></div></section>
 <script>
 (function(){
@@ -566,12 +759,14 @@ function aa_auth_shortcode() {
         tabs.forEach(function(t){t.addEventListener("click",function(){pane(t.dataset.pane)})});
         card.querySelectorAll("[data-switch]").forEach(function(a){a.addEventListener("click",function(e){e.preventDefault();pane(a.dataset.switch)})});
         var g=card.querySelector("[data-aa-google]");
-        if(g){g.addEventListener("click",function(){if(window.aaToast)aaToast("Google sign-in is being connected — use email sign-in meanwhile, it takes seconds.");else showErr("Google sign-in is being connected — use email sign-in meanwhile.")})}
+        if(g){g.addEventListener("click",function(){if(window.aaToast)aaToast("Google sign-in needs a free one-time setup (see README → Sign-in options). Email sign-in works right now.");else showErr("Google sign-in needs a free one-time setup. Email sign-in works right now.")})}
         function post(fd){fd.append("nonce",card.dataset.nonce);return fetch("/wp-admin/admin-ajax.php",{method:"POST",body:fd,credentials:"same-origin"}).then(function(r){return r.json()})}
         var lf=card.querySelector("[data-aa-login]");
         if(lf){lf.addEventListener("submit",function(e){e.preventDefault();hideErr();var fd=new FormData(lf);fd.append("action","aa_login_submit");post(fd).then(function(d){if(d&&d.status==="ok"){location.href=(d.redirect)||location.href}else{showErr((d&&d.msg)||"Sign-in failed — check your details.")}}).catch(function(){showErr("Network error — please try again.")})})}
         var rf=card.querySelector("[data-aa-register]");
-        if(rf){rf.addEventListener("submit",function(e){e.preventDefault();hideErr();var fd=new FormData(rf);fd.append("action","aa_register_submit");post(fd).then(function(d){if(d&&d.status==="ok"){location.href=(d.redirect)||location.href}else{showErr((d&&d.msg)||"Could not create the account.")}}).catch(function(){showErr("Network error — please try again.")})})}
+        if(rf){rf.addEventListener("submit",function(e){e.preventDefault();hideErr();var fd=new FormData(rf);fd.append("action","aa_register_submit");post(fd).then(function(d){if(d&&d.status==="ok"&&d.verified===false){var em=card.querySelector("[data-aa-vemail]");if(em)em.textContent=d.email||"";var mv=card.querySelector("[data-aa-vmail]");if(mv&&d.mail===false){mv.textContent="Heads up: this server cannot send email yet (SMTP not configured). The admin can verify your account from the admin panel, or set the free AA_SMTP_* constants in wp-config.";mv.style.display="block"}pane("verify")}else if(d&&d.status==="ok"){location.href=(d.redirect)||location.href}else{showErr((d&&d.msg)||"Could not create the account.")}}).catch(function(){showErr("Network error — please try again.")})})}
+        var rs=card.querySelector("[data-aa-resend]");
+        if(rs){rs.addEventListener("click",function(){rs.disabled=true;var n=card.querySelector("[data-aa-resend-note]");if(n)n.textContent="Sending…";var fd=new FormData();fd.append("action","aa_resend_verify");fetch("/wp-admin/admin-ajax.php",{method:"POST",body:fd,credentials:"same-origin"}).then(function(r){return r.json()}).then(function(d){if(n){n.textContent=(d&&d.msg)||"Sent.";n.style.color=(d&&d.status==="ok")?"#34d399":"#ff8a80"}setTimeout(function(){rs.disabled=false},4000)}).catch(function(){if(n)n.textContent="Network error.";rs.disabled=false})})}
 })();
 </script>
         <?php
@@ -615,6 +810,7 @@ function aa_profile_dashboard_html() {
 .aa-prof-logout{display:inline-flex;align-items:center;gap:8px;margin-top:18px;color:#ff8a80;font-size:13.5px;font-weight:600;text-decoration:none}
 </style>
 <section class="aa-prof"><div class="aa-wrap">
+        <?php echo function_exists( 'aa_verify_banner_html' ) ? aa_verify_banner_html() : ''; ?>
         <div class="aa-prof-hero">
                 <?php echo get_avatar( $uid, 58 ); ?>
                 <div><h2>Hello, <?php echo esc_html( $user->display_name ? $user->display_name : $user->user_login ); ?></h2>
@@ -700,8 +896,12 @@ function aa_register_submit_ajax() {
                 wp_send_json( array( 'status' => 'error', 'msg' => 'Could not create the account — try a different email.' ), 500 );
         }
         wp_update_user( array( 'ID' => $uid, 'display_name' => $name ) );
+        // Confirmation email first — the account can browse immediately, but
+        // downloads stay locked until the address is verified.
+        $mail_ok = function_exists( 'aa_email_send_verification' ) ? aa_email_send_verification( $uid ) : false;
+        update_user_meta( $uid, '_aa_email_verified', '0' );
         wp_signon( array( 'user_login' => $username, 'user_password' => $pw, 'remember' => true ), true );
-        wp_send_json( array( 'status' => 'ok', 'redirect' => home_url( '/library/' ) ) );
+        wp_send_json( array( 'status' => 'ok', 'verified' => false, 'mail' => (bool) $mail_ok, 'email' => $email, 'redirect' => home_url( '/library/' ) ) );
 }
 
 add_shortcode( 'aa_product_single', 'aa_product_single_shortcode' );
@@ -789,7 +989,7 @@ function aa_product_single_shortcode() {
         );
         while ( $rel_q->have_posts() ) {
                 $rel_q->the_post();
-                if ( count( $related ) < 4 ) { $related[] = get_the_ID(); }
+                if ( count( $related ) < 3 ) { $related[] = get_the_ID(); } // 3 = one full grid row
         }
         wp_reset_postdata();
         $rel_html = '';
@@ -951,6 +1151,7 @@ function aa_library_shortcode() {
 </style>
 <section class="aa-lib">
         <div class="aa-wrap">
+                <?php echo function_exists( 'aa_verify_banner_html' ) ? aa_verify_banner_html() : ''; ?>
                 <div class="aa-dl-banner">
                         <span class="aa-ms">cloud_download</span>
                         <div>
