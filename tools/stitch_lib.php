@@ -85,7 +85,6 @@ p,h1,h2,h3,h4{margin:0}
 /* ---- book cards (rendered by [aa_books]) ---- */
 .aa-products{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;list-style:none;margin:0;padding:0}
 @media(max-width:1024px){.aa-products{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:640px){.aa-products{grid-template-columns:1fr}}
 .aa-card{background:var(--aa-low);border:1px solid var(--aa-line);border-radius:12px;padding:16px;display:flex;flex-direction:column;transition:border-color .2s,transform .2s,box-shadow .2s;position:relative}
 .aa-card:hover{border-color:rgba(245,158,11,.65);transform:translateY(-4px);box-shadow:0 18px 40px rgba(2,6,12,.5)}
 .aa-media{position:relative;width:100%;aspect-ratio:3/4;border-radius:10px;overflow:hidden;background:var(--aa-bg);border:1px solid var(--aa-line);margin-bottom:16px}
@@ -114,6 +113,31 @@ p,h1,h2,h3,h4{margin:0}
 .aa-add:hover{filter:brightness(1.08)}
 .aa-add .aa-ms{font-size:17px}
 .aa-empty{grid-column:1/-1;text-align:center;color:var(--aa-dim);padding:48px 0;font-size:15px}
+/* Phones: 2 books per row with a compact card variant */
+@media(max-width:640px){
+  .aa-products{grid-template-columns:repeat(2,1fr);gap:14px}
+  .aa-card{padding:12px;border-radius:10px}
+  .aa-media{margin-bottom:10px;border-radius:8px}
+  .aa-fmt{font-size:8.5px;padding:3px 6px;top:8px;left:8px}
+  .aa-badge{font-size:8.5px;padding:3px 8px;top:8px;right:44px}
+  .aa-wishbtn{width:30px;height:30px;top:8px;right:8px}
+  .aa-wishbtn .aa-ms{font-size:15px}
+  .aa-meta{margin-bottom:4px}
+  .aa-mcat{font-size:9px}
+  .aa-mauth{font-size:10px}
+  .aa-title{font-size:14px;line-height:1.35;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .aa-stars{margin-bottom:10px;gap:4px}
+  .aa-star{font-size:12px}
+  .aa-rate{font-size:10px}
+  .aa-foot{flex-direction:column;align-items:stretch;gap:8px;padding-top:10px}
+  .aa-pricing{flex-direction:row;align-items:baseline;gap:6px;flex-wrap:wrap;row-gap:0}
+  .aa-now{font-size:15px;gap:5px}
+  .aa-now .aa-only{font-size:16px}
+  .aa-now del{font-size:11px}
+  .aa-save{font-size:9px;white-space:nowrap}
+  .aa-add{font-size:11px;padding:9px 10px;justify-content:center;border-radius:9px}
+  .aa-add .aa-ms{font-size:15px}
+}
 /* ---- pager ---- */
 .aa-pager-wrap{display:flex;flex-direction:column;gap:14px;align-items:center;margin-top:36px}
 .aa-pager-info{color:var(--aa-dim);font-size:13px;margin:0}

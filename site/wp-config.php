@@ -19,11 +19,28 @@ define( 'NONCE_SALT',       'P4o3i2u1y0t9r8e7w6q5p4o3i2u1y0t9r8e7w6q5p4o' );
 
 $table_prefix = 'wp_';
 
+# Portable media/asset URLs. WP core defines WP_CONTENT_URL from the RAW DB
+# siteurl during boot — before mu-plugins load — which would pin every
+# attachment, theme and plugin asset URL (uploads covers, Elementor CSS,
+# WooCommerce placeholder images…) to whatever host is stored in the DB.
+# Define it per-request instead so the store renders correctly whether it is
+# opened as localhost:8080, a LAN IP (phone testing), a tunnel or a domain.
+if ( ! defined( 'WP_CONTENT_URL' ) && ! empty( $_SERVER['HTTP_HOST'] )
+        && preg_match( '/^[a-z0-9.\-]+(:[0-9]{1,5})?$/i', (string) $_SERVER['HTTP_HOST'] ) ) {
+        $__aa_https = false;
+        if ( isset( $_SERVER['HTTPS'] ) && 'on' === strtolower( (string) $_SERVER['HTTPS'] ) ) {
+                $__aa_https = true;
+        } elseif ( isset( $_SERVER['HTTP_X_FORWARDED_PROTO'] ) && 'https' === strtolower( (string) $_SERVER['HTTP_X_FORWARDED_PROTO'] ) ) {
+                $__aa_https = true;
+        }
+        define( 'WP_CONTENT_URL', ( $__aa_https ? 'https' : 'http' ) . '://' . $_SERVER['HTTP_HOST'] . '/wp-content' );
+}
+
 define( 'WP_DEBUG', false );
 define( 'WP_ENVIRONMENT_TYPE', 'local' );
 define( 'DISALLOW_FILE_EDIT', true );
 
 if ( ! defined( 'ABSPATH' ) ) {
-	define( 'ABSPATH', __DIR__ . '/' );
+        define( 'ABSPATH', __DIR__ . '/' );
 }
 require_once ABSPATH . 'wp-settings.php';
