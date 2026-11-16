@@ -20,6 +20,18 @@ and assets always resolve — no search-replace needed when the domain changes.
 
 Stop with `Ctrl+C`. To rebuild after pulling changes: `git pull && docker compose up`.
 
+### Troubleshooting: "chmod: Operation not permitted" on startup
+
+Files that Apache created in `wp-content/uploads` during a previous run (e.g.
+Elementor regenerated CSS) belong to the container's internal user, so the
+one-time permission fix can't change them. This is **harmless** — newer builds
+boot anyway with a `[entrypoint] NOTE`. To clean it up permanently (optional):
+
+```bash
+sudo chown -R $USER:$USER wp-content/uploads
+docker compose up
+```
+
 ## Quick start (no Docker — plain PHP)
 
 Any PHP 8.x with the `pdo_sqlite` extension works:
