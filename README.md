@@ -61,9 +61,9 @@ touching production.
 | 2 | Shop | `/shop/` | catalog with search, category chips, client-side sort, pagination |
 | 3 | Ebook details | `/product/<slug>/` | cover, price + save %, read-sample, reviews, related books |
 | 4 | Cart | `/cart/` | dark-themed Woo cart + totals |
-| 5 | Checkout | `/checkout/` | billing, UPI/Bank Transfer gateway, order review |
-| 6 | My Library | `/library/` | purchased PDFs with re-download, purchase history |
-| 7 | My Account | `/my-account/` | login/register, orders, downloads, addresses, **Wishlist** tab |
+| 5 | Checkout | `/checkout/` | **address-free** (name + email only — it's all digital), UPI/Bank Transfer gateway, order review |
+| 6 | My Library | `/library/` | purchased PDFs with **download meters (N of 5 used)**, exhausted → “Buy again”, purchase history |
+| 7 | My Account | `/my-account/` | **Google + email/password sign in / register**, profile dashboard, orders, downloads, **Wishlist** tab |
 | 8 | About | `/about/` | brand story, mission & vision, publishing philosophy, authors |
 | 9 | Contact & Support | `/contact/` | form (saved to admin "Messages"), support desk, FAQ accordion |
 | 10 | Legal | `/privacy-policy/` `/terms/` `/refund-policy/` `/digital-delivery-policy/` `/copyright-policy/` | plain-language policies with TL;DR cards |
@@ -73,9 +73,37 @@ All pages render through the custom canvas shell (`aa_canvas_for_storefront()` i
 template through one hidden page (`[aa_product_single]`), and wishlist hearts live
 on every book card (stored per-user, shown in the My Account → Wishlist tab).
 Rebuild every page with:
-`wp eval 'require "tools/build_pages_v2.php";'` (**always with `--user=1`** —
-Elementor sanitizes `_elementor_data` for users without `unfiltered_html` and
-would strip the `<style>`/`<script>` tags from every widget).
+`wp eval 'require "tools/build_pages_v2.php";'` (v3 subset for auth/library/checkout/delivery-policy:
+`tools/build_pages_v3.php`). The builders impersonate an admin automatically —
+Elementor sanitizes `_elementor_data` for users without `unfiltered_html` (e.g. plain
+`wp eval` as user 0) and would strip the `<style>`/`<script>` tags from every widget.
+
+## Digital delivery & the 5-download rule (live)
+
+- Every product is **virtual + downloadable** with `download_limit = 5` and no expiry:
+  5 full PDF downloads per purchase, **the book stays in the account forever**.
+- Guest checkout is **off** — purchases always belong to an account, so downloads are
+  always preserved in My Library.
+- My Library shows a **“N of 5 downloads used”** meter per book; at 0 the card flips to
+  **“Downloads used up” + “Buy again”** (one click re-purchases and grants a fresh 5).
+- Hitting a used-up download URL directly shows a friendly limit message with a link
+  back to the library (`gettext` filter in `aa-store-tweaks.php`).
+- Checkout asks for **name + email only** (no address fields, no order notes).
+- The order-received screen has a gold **“Open My Library to download”** CTA.
+
+## Sign-in options (Google + email/password)
+
+- `/my-account/` renders a Stitch-designed auth card: **Continue with Google** pill,
+  “or continue with email” divider, sign-in + register tabs (AJAX, nonce-guarded).
+- Google sign-in is powered by the **Nextend Social Login** plugin (bundled in
+  `wp-content/plugins/nextend-facebook-connect`). It goes live the moment the Google
+  provider has real OAuth credentials: create an OAuth 2.0 Client in Google Cloud
+  Console (type *Web application*), then in **wp-admin → Nextend Social Login → Google**
+  paste the Client ID + Secret (NSL shows the exact Authorized redirect URI to register)
+  and enable the provider. Until then the storefront button shows a friendly
+  “use email meanwhile” toast instead of a broken flow.
+- Email/password registration is open (min 8 chars); accounts get the Woo `customer`
+  role.
 
 ## Custom admin panel — `/web-admin`
 
@@ -90,6 +118,9 @@ WordPress' own wp-admin.
   description, Draft vs Published.
 - **Categories** — create / edit / delete product categories.
 - **Orders** — order list and detail view (items, totals, customer, status).
+- **Downloads** — every download grant across customers: who owns which book, how
+  many of the 5 downloads were used/left, grant date, and **Reset to 5** / **+5**
+  actions for support cases. A second tab summarizes each customer's library.
 - **Messages** — contact-form submissions from the Contact & Support page:
   list, read, reply by email, delete. Unread count on the dashboard.
 - **Subscribers** — newsletter list (from the footer subscribe form), remove

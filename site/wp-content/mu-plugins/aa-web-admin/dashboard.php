@@ -28,6 +28,12 @@ function aa_admin_dashboard() {
         $subs      = get_option( 'aa_subscribers', array() );
         $subs_n    = is_array( $subs ) ? count( $subs ) : 0;
 
+        global $wpdb;
+        $dl_grants = 0;
+        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->prefix . 'woocommerce_downloadable_product_permissions' ) ) ) {
+                $dl_grants = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}woocommerce_downloadable_product_permissions" );
+        }
+
         ob_start();
         ?>
         <div class="stat-cards">
@@ -36,6 +42,7 @@ function aa_admin_dashboard() {
                 <div class="card stat"><b><?php echo esc_html( $sym . number_format( $revenue, 2 ) ); ?></b><span>Paid revenue</span></div>
                 <div class="card stat"><b><?php echo (int) $unread_n; ?></b><span>Unread messages</span></div>
                 <div class="card stat"><b><?php echo (int) $subs_n; ?></b><span>Newsletter subscribers</span></div>
+                <div class="card stat"><b><?php echo (int) $dl_grants; ?></b><span>Download grants</span></div>
         </div>
 
         <div class="dash-cols">
@@ -44,6 +51,7 @@ function aa_admin_dashboard() {
                         <div class="quick">
                                 <a class="btn pri" href="<?php echo esc_url( aa_admin_url( 'products/new' ) ); ?>"><?php echo aa_admin_icon( 'plus' ); ?> Add a book</a>
                                 <a class="btn ghost" href="<?php echo esc_url( aa_admin_url( 'orders' ) ); ?>">View orders</a>
+                                <a class="btn ghost" href="<?php echo esc_url( aa_admin_url( 'downloads' ) ); ?>">Download grants</a>
                                 <a class="btn ghost" href="<?php echo esc_url( aa_admin_url( 'messages' ) ); ?>">Customer messages</a>
                                 <a class="btn ghost" href="<?php echo esc_url( aa_admin_url( 'subscribers' ) ); ?>">Subscribers</a>
                         </div>

@@ -8,6 +8,15 @@
  * Run:  wp eval-file tools/set_stitch_pages.php
  */
 
+/* Build as an admin: Elementor registers _elementor_data with a sanitize
+ * callback that runs wp_kses over every widget string for users without
+ * unfiltered_html — wp-cli runs as user 0, so <style> tags would be stripped
+ * from every html widget. Impersonate an administrator for the build. */
+if ( ! current_user_can( 'unfiltered_html' ) ) {
+        $aa_build_admins = get_users( array( 'role' => 'Administrator', 'number' => 1, 'fields' => 'ID', 'orderby' => 'ID', 'order' => 'ASC' ) );
+        if ( $aa_build_admins ) { wp_set_current_user( (int) reset( $aa_build_admins ) ); }
+}
+
 /* ---------------------------------------------------------------- shared */
 
 $aa_common_html = <<<'HTML'

@@ -31,6 +31,8 @@ function aa_admin_icon( $name ) {
                 'out'     => '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>',
                 'plus'    => '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
                 'search'  => '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg>',
+                'download' => '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>',
+                'file'   => '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>',
         );
         return isset( $icons[ $name ] ) ? $icons[ $name ] : '';
 }
@@ -42,6 +44,7 @@ function aa_admin_layout( $title, $body, $active = 'dashboard' ) {
                 'products'   => array( aa_admin_url( 'products' ), 'Books', 'book' ),
                 'categories' => array( aa_admin_url( 'categories' ), 'Categories', 'tag' ),
                 'orders'     => array( aa_admin_url( 'orders' ), 'Orders', 'bag' ),
+                'downloads'  => array( aa_admin_url( 'downloads' ), 'Downloads', 'download' ),
                 'messages'   => array( aa_admin_url( 'messages' ), 'Messages', 'mail' ),
                 'subscribers' => array( aa_admin_url( 'subscribers' ), 'Subscribers', 'users' ),
         );
