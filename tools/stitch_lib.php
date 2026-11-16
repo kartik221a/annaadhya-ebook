@@ -82,6 +82,25 @@ p,h1,h2,h3,h4{margin:0}
 .aa-mobile-menu a{display:block;padding:11px 0;color:var(--aa-tx)!important;text-decoration:none!important;font-weight:600;font-size:15px;border-bottom:1px solid var(--aa-line)}
 .aa-mobile-menu a:last-child{border-bottom:0}
 @media(max-width:767px){.aa-menu{display:none}}
+/* ---- mobile bottom tab bar + search sheet ---- */
+.aa-tabbar{position:fixed;left:0;right:0;bottom:0;z-index:950;display:flex;background:rgba(16,20,25,.97);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--aa-line);padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+.aa-tabbar a,.aa-tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:0;color:var(--aa-dim);font-family:inherit;font-size:10px;font-weight:600;letter-spacing:.02em;padding:5px 0 3px;cursor:pointer;text-decoration:none!important}
+.aa-tabbar .aa-ms{font-size:22px}
+.aa-tabbar a:active,.aa-tabbar button:active{color:var(--aa-gold)}
+.aa-tabbar .aa-on{color:var(--aa-goldbg)!important}
+@media(min-width:768px){.aa-tabbar{display:none!important}}
+.aa-searchsheet{position:fixed;inset:0;z-index:960;background:rgba(10,14,19,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:flex-start;justify-content:center;padding:96px 20px 0}
+.aa-searchsheet[hidden]{display:none}
+.aa-ss-in{display:flex;align-items:center;gap:10px;background:var(--aa-low);border:1px solid var(--aa-line2);border-radius:14px;padding:6px 10px 6px 16px;width:100%;max-width:520px}
+.aa-ss-in .aa-ms{color:var(--aa-dim);font-size:22px}
+.aa-ss-in input{flex:1;background:none;border:0;outline:none;color:var(--aa-tx);font-size:16px;font-family:inherit;padding:10px 0;min-width:0}
+.aa-ss-in input::placeholder{color:#7a7f8f}
+.aa-ss-x{background:none;border:0;color:var(--aa-dim);cursor:pointer;padding:8px;display:flex}
+.aa-ss-x .aa-ms{font-size:20px}
+@media(max-width:767px){
+  .aa-footer{padding-bottom:calc(88px + env(safe-area-inset-bottom))}
+  .aa-toast{bottom:calc(84px + env(safe-area-inset-bottom))}
+}
 /* ---- book cards (rendered by [aa_books]) ---- */
 .aa-products{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;list-style:none;margin:0;padding:0}
 @media(max-width:1024px){.aa-products{grid-template-columns:repeat(2,1fr)}}
@@ -192,7 +211,21 @@ function aa_nav_html( $active = '' ) {
     <a href="/my-account/">My Account</a>
     <a href="/cart/">Cart</a>
   </div>
-</header>';
+</header>
+<nav class="aa-tabbar" aria-label="Mobile tab bar">
+  <a href="/" class="' . $cls( 'home' ) . '"><span class="aa-ms">home</span><span>Home</span></a>
+  <a href="/shop/" class="' . $cls( 'shop' ) . '"><span class="aa-ms">storefront</span><span>Shop</span></a>
+  <button type="button" data-aa-search aria-label="Search"><span class="aa-ms">search</span><span>Search</span></button>
+  <a href="/library/" class="' . $cls( 'library' ) . '"><span class="aa-ms">auto_stories</span><span>Library</span></a>
+  <a href="/my-account/" class="' . $cls( 'account' ) . '"><span class="aa-ms">person</span><span>Account</span></a>
+</nav>
+<div class="aa-searchsheet" id="aa-searchsheet" hidden>
+  <form class="aa-ss-in" action="/shop/" method="get">
+    <span class="aa-ms">search</span>
+    <input type="search" name="book" placeholder="Search books, authors, topics..." aria-label="Search books">
+    <button type="button" class="aa-ss-x" aria-label="Close search"><span class="aa-ms">close</span></button>
+  </form>
+</div>';
 }
 
 /* Footer + the page behaviour script (cart badge, category counts, sort, newsletter, wishlist). */
@@ -301,6 +334,17 @@ function aa_footer_html() {
   },true);
   var burger=document.querySelector(".aa-burger"),mm=document.querySelector(".aa-mobile-menu");
   if(burger&&mm){burger.addEventListener("click",function(){mm.classList.toggle("open")})}
+  var ssheet=document.getElementById("aa-searchsheet");
+  if(ssheet){
+    var ssIn=ssheet.querySelector("input");
+    document.querySelectorAll("[data-aa-search]").forEach(function(tb){
+      tb.addEventListener("click",function(){ssheet.hidden=false;if(ssIn){ssIn.focus()}})
+    });
+    var ssx=ssheet.querySelector(".aa-ss-x");
+    if(ssx){ssx.addEventListener("click",function(){ssheet.hidden=true})}
+    ssheet.addEventListener("click",function(e){if(e.target===ssheet){ssheet.hidden=true}});
+    document.addEventListener("keydown",function(e){if(e.key==="Escape"){ssheet.hidden=true}});
+  }
   var sp0=new URLSearchParams(location.search),st0=(sp0.get("book")||sp0.get("s")||"").trim();
   if(st0){
     var tt=document.querySelector("[data-aa-bookshelf-title]"),ts=document.querySelector("[data-aa-bookshelf-sub]");
