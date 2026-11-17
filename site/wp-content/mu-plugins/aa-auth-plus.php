@@ -22,6 +22,29 @@ function aa_smtp_configured() {
         return defined( 'AA_SMTP_HOST' ) && AA_SMTP_HOST && defined( 'AA_SMTP_USER' ) && AA_SMTP_USER;
 }
 
+/* PHPMailer 7.x (bundled since WP 6.9) validates the From address strictly
+ * inside wp_mail()'s own setFrom() call — which happens BEFORE the
+ * phpmailer_init hook. A localhost default From (wordpress@localhost) is
+ * rejected there and wp_mail() returns false before any SMTP transport is
+ * applied. The canonical wp_mail_from filters run earlier, so the branded,
+ * valid From from the AA_SMTP_* constants always wins. */
+add_filter( 'wp_mail_from', 'aa_wp_mail_from' );
+add_filter( 'wp_mail_from_name', 'aa_wp_mail_from_name' );
+
+function aa_wp_mail_from( $from ) {
+        if ( aa_smtp_configured() ) {
+                return defined( 'AA_SMTP_FROM' ) && AA_SMTP_FROM ? AA_SMTP_FROM : AA_SMTP_USER;
+        }
+        return $from;
+}
+
+function aa_wp_mail_from_name( $name ) {
+        if ( aa_smtp_configured() ) {
+                return defined( 'AA_SMTP_FROM_NAME' ) && AA_SMTP_FROM_NAME ? AA_SMTP_FROM_NAME : 'Annaadhya Ebooks';
+        }
+        return $name;
+}
+
 add_action( 'phpmailer_init', 'aa_smtp_phpmailer' );
 
 function aa_smtp_phpmailer( $phpmailer ) {
@@ -35,8 +58,6 @@ function aa_smtp_phpmailer( $phpmailer ) {
         if ( defined( 'AA_SMTP_SECURE' ) && '' !== AA_SMTP_SECURE ) {
                 $phpmailer->SMTPSecure = AA_SMTP_SECURE;
         }
-        $phpmailer->From       = defined( 'AA_SMTP_FROM' ) ? AA_SMTP_FROM : AA_SMTP_USER;
-        $phpmailer->FromName   = defined( 'AA_SMTP_FROM_NAME' ) ? AA_SMTP_FROM_NAME : 'Annaadhya Ebooks';
 }
 
 /* ------------------------------------------------------------------------
