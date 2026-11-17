@@ -1,10 +1,12 @@
 <?php
-# Local dev configuration — SQLite database (no MySQL server required).
-# The SQLite drop-in at wp-content/db.php overrides all DB_* constants below.
-define( 'DB_NAME', 'wordpress' );
-define( 'DB_USER', 'wp' );
-define( 'DB_PASSWORD', 'wp' );
-define( 'DB_HOST', 'localhost' );
+# Database: MySQL, served by the `db` service in docker-compose.yml (MySQL 8.4).
+# The WORDPRESS_DB_* variables come from docker-compose.yml; the fallbacks
+# below match them, so WP-CLI inside the container works out of the box.
+# For CLI runs outside docker set WORDPRESS_DB_HOST, e.g. 127.0.0.1:3306.
+define( 'DB_NAME',     getenv( 'WORDPRESS_DB_NAME' )     ?: 'wordpress' );
+define( 'DB_USER',     getenv( 'WORDPRESS_DB_USER' )     ?: 'wp' );
+define( 'DB_PASSWORD', getenv( 'WORDPRESS_DB_PASSWORD' ) ?: 'wp' );
+define( 'DB_HOST',     getenv( 'WORDPRESS_DB_HOST' )     ?: 'db' );
 define( 'DB_CHARSET', 'utf8mb4' );
 define( 'DB_COLLATE', '' );
 

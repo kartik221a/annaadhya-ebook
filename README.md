@@ -1,8 +1,37 @@
 # Annaadhya eBooks — WordPress ebook store (dev preview)
 
 A complete, portable WordPress + WooCommerce ebook store. The **entire site lives in
-this repository as plain files** — WordPress core, plugins, theme, media, and the
-SQLite database — so `git pull` always gives you the latest state, ready to run.
+this repository as plain files** — WordPress core, plugins, theme, media, and a
+SQLite seed snapshot of the store's content (auto-imported into MySQL on first
+boot) — so `git pull` always gives you the latest state, ready to run.
+
+## Database: MySQL 8.4 (was SQLite)
+
+The stack now runs **WordPress on MySQL 8.4** (the `db` service in
+`docker-compose.yml`, data in the `db_data` volume). The old SQLite drop-in is
+gone; the tracked SQLite file under `site/wp-content/database/` is now only a
+**seed snapshot**:
+
+- On the first boot the web container runs `tools/migrate-sqlite-to-mysql.php`
+  automatically — it rebuilds every table with its original MySQL schema
+  (varchar lengths, indexes, auto-increment counters) from the metadata the
+  SQLite drop-in preserved, imports all rows, and verifies the row counts.
+- Every later boot re-runs it as a fast no-op ("already migrated").
+- The seed file is never modified or deleted, so a fresh clone always boots
+  with the full store. To re-import it from scratch:
+  `docker compose exec web php tools/migrate-sqlite-to-mysql.php --wipe`.
+- **Content changes made via wp-admin / wp-cli now live in the `db_data`
+  volume**, not in git. To snapshot them, dump the database and commit it:
+  `docker compose exec db sh -c 'mysqldump -uwp -pwp wordpress' > db-backup.sql`.
+
+Useful commands:
+
+| | |
+|---|---|
+| Open a MySQL shell | `docker compose exec db mysql -uwp -pwp wordpress` |
+| Backup to a file | `docker compose exec db sh -c 'mysqldump -uwp -pwp wordpress' > db-backup.sql` |
+| Restore a backup | `docker compose exec -i db sh -c 'mysql -uwp -pwp wordpress' < db-backup.sql` |
+| Reset to the seed | `docker compose down -v` (drops the volume) then `docker compose up` |
 
 ## Quick start (Docker — recommended)
 
@@ -11,12 +40,14 @@ git pull
 docker compose up
 ```
 
-Then open **http://localhost:8080** in your browser. That's it — no database setup,
-no MySQL, no config. The stack is WordPress running on SQLite via the official
-[SQLite Database Integration](https://wordpress.org/plugins/sqlite-database-integration/)
-plugin. **The site is host-portable**: URLs follow whatever hostname you open it
-with (localhost, a LAN IP, a tunnel or the real domain), so `/web-admin`, links
-and assets always resolve — no search-replace needed when the domain changes.
+Then open **http://localhost:8080** in your browser. That's it — no database
+setup, no config. First `up` builds the web image (stock PHP 8.3 + Apache, plus
+`mysqli`/`pdo_mysql`/`opcache`) and starts MySQL 8.4 — give it a minute or two.
+When the log shows `[migrate] Migration complete`, the store's data has landed
+in MySQL and the site is being served from it. **The site is host-portable**:
+URLs follow whatever hostname you open it with (localhost, a LAN IP, a tunnel
+or the real domain), so `/web-admin`, links and assets always resolve — no
+search-replace needed when the domain changes.
 
 Stop with `Ctrl+C`. To rebuild after pulling changes: `git pull && docker compose up`.
 
@@ -34,10 +65,16 @@ docker compose up
 
 ## Quick start (no Docker — plain PHP)
 
-Any PHP 8.x with the `pdo_sqlite` extension works:
+Any PHP 8.x with the `mysqli` and `pdo_mysql` extensions works, but you need a
+MySQL server (5.7+ / 8.x / MariaDB 10.4+) and point the site at it first:
 
 ```bash
 git pull
+export WORDPRESS_DB_HOST=127.0.0.1:3306
+export WORDPRESS_DB_NAME=wordpress WORDPRESS_DB_USER=wp WORDPRESS_DB_PASSWORD=wp
+# one-time: create the db/user, then import the seed snapshot:
+php tools/migrate-sqlite-to-mysql.php
+# run the site:
 php -S 127.0.0.1:8080 -t site router.php
 ```
 
@@ -58,9 +95,10 @@ touching production.
 
 | Path | Purpose |
 |---|---|
-| `site/` | The full WordPress installation (core + plugins + theme + SQLite DB) |
-| `docker-compose.yml` + `docker/apache.conf` | One-command preview stack (PHP 8.3 + Apache) |
+| `site/` | The full WordPress installation (core + plugins + theme + SQLite seed) |
+| `docker-compose.yml` + `docker/` | One-command stack: web (PHP 8.3 + Apache + mysqli) and `db` (MySQL 8.4) |
 | `router.php` | Runner for the no-Docker PHP built-in server option |
+| `tools/migrate-sqlite-to-mysql.php` | One-shot SQLite → MySQL import (runs automatically on first boot) |
 | `tools/build_content.sh` | wp-cli script that generated pages, menu, products |
 | `tools/make_samples.py` | Python script that generated the sample covers + PDFs |
 | `tools/set_elementor_home.php` | wp-cli script that builds the Home page as an Elementor page |
@@ -258,21 +296,21 @@ implementations — incremental edits are normally done via wp-admin or wp-cli.
 
 ## Production deploy path (later)
 
-This dev copy runs on SQLite; the Hostinger production site runs MySQL. When it's
-time to launch there are two clean routes:
+This dev copy now runs on **MySQL 8.4** — the same engine family as the
+Hostinger production site, so moving is a straight data hand-off:
 
-1. **API provisioning (preferred):** Hostinger support whitelists our builder IP
-   (no DNS changes at all), then content is recreated on the live site via
-   wp-cli / REST API — same scripts, different target.
-2. **Manual migration:** export content from this site (wp-admin → Tools →
-   Export) and import into the production site, or use a migration plugin
-   (All-in-One WP Migration / Duplicator) from a machine that can reach the site.
+1. **mysqldump (simplest now):** `docker compose exec db sh -c 'mysqldump -uwp -pwp wordpress' > db.sql`,
+   import it on the Hostinger MySQL, run `wp search-replace` for the URL, done.
+2. **WP export/import:** wp-admin → Tools → Export, then import on production
+   (media files need a separate copy of `wp-content/uploads`).
 3. In both cases: update the site URL (`wp search-replace`), change the admin
    password, switch the store to real payment gateway keys.
 
 ## Repository notes
 
-- The SQLite database (`site/wp-content/database/`) is tracked in git on purpose —
-  it IS the site. Commit after making changes so the next `git pull` sees them.
+- The SQLite seed (`site/wp-content/database/`) is tracked in git on purpose —
+  fresh clones get the full store on first boot. It is only read by the
+  migrator, never written. Runtime content changes live in the MySQL volume;
+  snapshot them with the mysqldump command from the Database section.
 - Nothing here is committed to the production site; this repo is a self-contained
   preview environment.

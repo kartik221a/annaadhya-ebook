@@ -1,22 +1,65 @@
 services:
+  # MySQL 8.4 LTS - replaces the old SQLite drop-in database.
+  # Data lives in the named volume `db_data`, so it survives reboots and
+  # container rebuilds. First boot takes ~30s while the data directory is
+  # initialised (the healthcheck below gates the web container on it).
+  db:
+    image: mysql:8.4
+    container_name: annaadhya-db
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wp
+      MYSQL_PASSWORD: wp
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+    # Optional: expose MySQL to GUI clients on the host. Uncomment if you need
+    # it - the site itself never uses this port.
+    # ports:
+    #   - "127.0.0.1:3306:3306"
+
   web:
-    image: php:8.3-apache
+    # Built from docker/Dockerfile: stock php:8.3-apache + mysqli/pdo_mysql/opcache.
+    # First `docker compose up` builds it (1-2 min), afterwards it is cached.
+    build: ./docker
     container_name: annaadhya-ebook
     ports:
       - "8080:80"
     volumes:
       - ./site:/var/www/html
       - ./docker/apache.conf:/etc/apache2/sites-available/000-default.conf:ro
+    environment:
+      # Read by wp-config.php and by the migration script below.
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DB_USER: wp
+      WORDPRESS_DB_PASSWORD: wp
+    depends_on:
+      db:
+        condition: service_healthy
     # a2enmod rewrite: the php:8.3-apache image ships mod_rewrite DISABLED.
     # Without it, every pretty permalink (/shop/ etc.) returns Apache 404.
     # chmod makes the bind mount writable for the container user on any host OS.
-    # IMPORTANT: permission fixes must NEVER abort the boot. On some hosts
-    # (rootless docker / userns-remap) files previously written by the
-    # container's www-data user cannot be chmod-ed again, and a failing
+    # IMPORTANT: permission fixes and the migration must NEVER abort the boot.
+    # On some hosts (rootless docker / userns-remap) files previously written
+    # by the container's www-data user cannot be chmod-ed again, and a failing
     # `chmod ... && exec apache2-foreground` chain would leave the site dead.
     command: >
       bash -c "a2enmod rewrite >/dev/null 2>&1;
       chmod -R a+rwX /var/www/html/wp-content >/dev/null 2>&1 ||
       echo '[entrypoint] NOTE: some files in wp-content could not be chmod-ed (they were created by a previous container run). Booting anyway - the site will still load.';
+      echo '[entrypoint] Checking for SQLite -> MySQL data migration (a fast no-op once done)...';
+      php /var/www/html/tools/migrate-sqlite-to-mysql.php ||
+      echo '[entrypoint] NOTE: database migration did not complete - see the log above. The site still boots; re-run manually with: docker compose exec web php tools/migrate-sqlite-to-mysql.php';
       exec apache2-foreground"
     restart: unless-stopped
+
+volumes:
+  db_data:
