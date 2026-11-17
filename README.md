@@ -126,17 +126,41 @@ Elementor sanitizes `_elementor_data` for users without `unfiltered_html` (e.g. 
   “Verify your email to unlock downloads” banner with a resend button, and a
   download attempt before verification redirects to the library with that banner.
   `/verify-email/?uid=&key=` is the one-click confirmation (and signs you in).
-- **Google sign-in without Google Cloud Console**: `aa-auth-plus.php` implements
-  a minimal OAuth2/OIDC client configured through `wp-config.php` constants —
-  either Google's free OAuth client (creating an OAuth 2.0 Client ID is free,
-  no billing account needed) or any OIDC provider:
+- **Firebase Authentication — recommended (no SMTP server, no Google Cloud
+  Console, no meaningful limits)**: both sign-in methods run on Firebase's own
+  OAuth client and Firebase sends the verification + password-reset mails
+  itself. Free tier: 50k monthly actives with no per-user charge, 1,000
+  verification mails/day. One-time console setup (console.firebase.google.com,
+  free, no card): create project → **Authentication → Get started** → enable
+  **Email/Password** and **Google** → Settings → Authorized domains keeps
+  `localhost` (any port) for dev, add your real domain when you go live →
+  Project settings → General → Your apps → Web app (`</>`) → copy the config.
+  Then add two constants to `wp-config.php`:
+  ```php
+  define( 'AA_FB_API_KEY', 'AIza…' );        // Web API key (public by design)
+  define( 'AA_FB_PROJECT_ID', 'annaadhya' ); // Firebase project id
+  ```
+  The auth card switches to Firebase automatically: Google opens a popup,
+  sign-ups get Firebase's verification mail, "Forgot password?" sends a
+  Firebase reset mail. The browser hands the Firebase ID token to
+  `admin-ajax.php` (`aa-firebase-auth.php` verifies the RS256 signature against
+  Google's public certs plus every Firebase claim), which creates/logs in the
+  WordPress customer and syncs the verified flag that gates downloads. Google
+  users arrive pre-verified; email users stay gated until they click the mail
+  link — the amber banner's Resend button goes through Firebase, and the
+  profile page auto-syncs + unlocks the moment they return from it. Until the
+  constants exist the card keeps the built-in flow below — nothing breaks.
+- **Native Google sign-in without Firebase**: `aa-auth-plus.php` also ships a
+  minimal OAuth2/OIDC client configured through constants — either your own
+  Google OAuth client (creating an OAuth 2.0 Client ID is free, no billing
+  account needed) or any OIDC provider:
   ```php
   // Option A — native Google:
   define( 'AA_GOOGLE_CLIENT_ID', '...apps.googleusercontent.com' );
   define( 'AA_GOOGLE_CLIENT_SECRET', '...' );
-  // Option B — any OpenID Connect provider (discovery-based), e.g. a free
-  // Auth0 tenant (25k MAU free, ships its own Google dev keys — zero Google
-  // Cloud Console work). Allowed callback URL: https://<host>/oauth/callback
+  // Option B — any OpenID Connect provider (discovery-based). Note: Auth0's
+  // free tier now requires a credit card for social login/custom domains, so
+  // the Firebase path above is the cleanest free option.
   define( 'AA_OAUTH_ISSUER', 'https://your-tenant.eu.auth0.com/' );
   define( 'AA_OAUTH_CLIENT_ID', '...' );
   define( 'AA_OAUTH_CLIENT_SECRET', '...' );
@@ -145,9 +169,10 @@ Elementor sanitizes `_elementor_data` for users without `unfiltered_html` (e.g. 
   route is `/oauth/start`. OAuth users are email-verified automatically.
   Until constants are set the Google button shows a friendly toast instead of
   a broken flow, and email sign-in keeps working.
-- **Outgoing email needs SMTP** (the PHP `mail()` fallback rarely works on
-  dev/cheap hosts). Free options that work with the bundled `AA_SMTP_*`
-  constants: **Brevo** (300 mails/day free, no card) or a Gmail app password.
+- **Outgoing email needs SMTP for the built-in flow** (the PHP `mail()`
+  fallback rarely works on dev/cheap hosts). Free options that work with the
+  bundled `AA_SMTP_*` constants: **Brevo** (300 mails/day free, no card) or a
+  Gmail app password.
   ```php
   define( 'AA_SMTP_HOST', 'smtp-relay.brevo.com' );
   define( 'AA_SMTP_PORT', 587 );

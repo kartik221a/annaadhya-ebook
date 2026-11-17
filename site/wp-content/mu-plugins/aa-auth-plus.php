@@ -251,7 +251,15 @@ function aa_verify_banner_html() {
         $u = get_userdata( $uid );
         $needed = isset( $_GET['aa_verify'] ) && 'needed' === $_GET['aa_verify'];
         $ajax = esc_url( admin_url( 'admin-ajax.php' ) );
-        return '<style>.aa-vbanner{display:flex;gap:14px;align-items:flex-start;background:rgba(255,181,84,.08);border:1px solid rgba(245,158,11,.45);border-radius:14px;padding:18px 22px;margin:0 0 26px}'
+        // Firebase readers resend through the SDK (Firebase mails it itself, no SMTP);
+        // the SDK is only loaded on this page when it can actually be used.
+        $fb_head = '';
+        if ( function_exists( 'aa_fb_active' ) && aa_fb_active() ) {
+                $fb_head = '<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>'
+                        . '<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>'
+                        . '<script>window.AaFirebaseConfig=' . wp_json_encode( aa_fb_js_config() ) . ';</script>';
+        }
+        return $fb_head . '<style>.aa-vbanner{display:flex;gap:14px;align-items:flex-start;background:rgba(255,181,84,.08);border:1px solid rgba(245,158,11,.45);border-radius:14px;padding:18px 22px;margin:0 0 26px}'
                 . '.aa-vbanner>.aa-ms{color:var(--aa-goldbg,#f59e0b);font-size:26px;margin-top:2px}'
                 . '.aa-vbanner strong{display:block;color:#e0e2ea;font-size:15px;margin-bottom:4px}'
                 . '.aa-vbanner p{color:#d8c3ad;font-size:13.5px;line-height:1.65;margin:0 0 10px}'
@@ -266,7 +274,7 @@ function aa_verify_banner_html() {
                 . '<p>We sent a confirmation link to ' . esc_html( $u->user_email ) . '. Click it once and every download in your library unlocks &mdash; attempts before that are paused, not lost.</p>'
                 . '<div class="aa-vbanner-row"><button type="button" class="aa-vbanner-btn" data-aa-vresend><span class="aa-ms">forward_to_inbox</span><span>Resend confirmation email</span></button>'
                 . '<span class="aa-vbanner-note" data-aa-vnote></span></div></div>'
-                . '<script>(function(){var b=document.querySelector("[data-aa-vresend]");if(!b)return;b.addEventListener("click",function(){b.disabled=true;var n=document.querySelector("[data-aa-vnote]");if(n)n.textContent="Sending\\u2026";var fd=new FormData();fd.append("action","aa_resend_verify");fetch("' . $ajax . '",{method:"POST",body:fd,credentials:"same-origin"}).then(function(r){return r.json()}).then(function(d){if(n){n.textContent=(d&&d.msg)||"Sent.";n.style.color=(d&&d.status==="ok")?"#34d399":"#ff8a80"}setTimeout(function(){b.disabled=false},3000)}).catch(function(){if(n)n.textContent="Network error — try again.";b.disabled=false})})})();</script>'
+                . '<script>(function(){var b=document.querySelector("[data-aa-vresend]");if(!b)return;var fbU=(window.AaFirebaseConfig&&window.firebase)?firebase.auth().currentUser:null;b.addEventListener("click",function(){b.disabled=true;var n=document.querySelector("[data-aa-vnote]");if(n)n.textContent="Sending…";if(fbU){fbU.sendEmailVerification({url:location.origin+"/my-account/"}).then(function(){if(n){n.textContent="Confirmation email sent — check your inbox (and spam).";n.style.color="#34d399"}setTimeout(function(){b.disabled=false},4000)}).catch(function(e){if(n){n.textContent=(e&&e.message)||"Could not send — try again.";n.style.color="#ff8a80"}b.disabled=false});return}var fd=new FormData();fd.append("action","aa_resend_verify");fetch("' . $ajax . '",{method:"POST",body:fd,credentials:"same-origin"}).then(function(r){return r.json()}).then(function(d){if(n){n.textContent=(d&&d.msg)||"Sent.";n.style.color=(d&&d.status==="ok")?"#34d399":"#ff8a80"}setTimeout(function(){b.disabled=false},3000)}).catch(function(){if(n)n.textContent="Network error — try again.";b.disabled=false})})})();</script>'
                 . '</div>';
 }
 

@@ -656,6 +656,7 @@ function aa_auth_shortcode() {
         if ( is_user_logged_in() ) { return aa_profile_dashboard_html(); }
 
         $nonce  = wp_create_nonce( 'aa_auth' );
+        $fb     = function_exists( 'aa_fb_active' ) ? aa_fb_active() : false;
         $google = function_exists( 'aa_oauth_active' ) ? aa_oauth_active() : aa_auth_google_active();
         $g_url  = $google ? esc_url( home_url( '/oauth/start?redirect_to=' . urlencode( home_url( '/library/' ) ) ) ) : '';
 
@@ -703,7 +704,13 @@ function aa_auth_shortcode() {
         <div class="aa-auth-err" data-aa-auth-err></div>
 
         <div class="aa-auth-pane" data-aa-pane="signin">
-                <?php if ( $g_url ) : ?>
+                <?php if ( $fb ) : ?>
+                        <button type="button" class="aa-gbtn" data-aa-fbgoogle>
+                                <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.5l6.7-6.7C35.6 2.4 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.8 6.1C12.3 13.2 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 7l7.6 5.9c4.4-4.1 6.7-10.1 6.7-17.4z"/><path fill="#FBBC05" d="M10.4 28.7a14.5 14.5 0 0 1 0-9.4l-7.8-6.1a24 24 0 0 0 0 21.6l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.4-5.6l-7.6-5.9c-2.1 1.4-4.8 2.3-7.8 2.3-6.3 0-11.7-3.7-13.6-8.9l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
+                                <span>Continue with Google</span>
+                        </button>
+                        <div class="aa-auth-div"><span>or continue with email</span></div>
+                <?php elseif ( $g_url ) : ?>
                         <a class="aa-gbtn" href="<?php echo $g_url; ?>">
                                 <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.5l6.7-6.7C35.6 2.4 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.8 6.1C12.3 13.2 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 7l7.6 5.9c4.4-4.1 6.7-10.1 6.7-17.4z"/><path fill="#FBBC05" d="M10.4 28.7a14.5 14.5 0 0 1 0-9.4l-7.8-6.1a24 24 0 0 0 0 21.6l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.4-5.6l-7.6-5.9c-2.1 1.4-4.8 2.3-7.8 2.3-6.3 0-11.7-3.7-13.6-8.9l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
                                 <span>Continue with Google</span>
@@ -748,6 +755,11 @@ function aa_auth_shortcode() {
                 <a class="aa-auth-continue" href="/library/"><span>Continue to the store &rarr;</span></a>
         </div>
 </div></div></section>
+        <?php if ( $fb ) : ?>
+        <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+        <script>window.AaFirebaseConfig=<?php echo wp_json_encode( aa_fb_js_config() ); ?>;</script>
+        <?php endif; ?>
 <script>
 (function(){
         var card=document.querySelector("[data-aa-authcard]");if(!card)return;
@@ -761,12 +773,23 @@ function aa_auth_shortcode() {
         var g=card.querySelector("[data-aa-google]");
         if(g){g.addEventListener("click",function(){if(window.aaToast)aaToast("Google sign-in needs a free one-time setup (see README → Sign-in options). Email sign-in works right now.");else showErr("Google sign-in needs a free one-time setup. Email sign-in works right now.")})}
         function post(fd){fd.append("nonce",card.dataset.nonce);return fetch("/wp-admin/admin-ajax.php",{method:"POST",body:fd,credentials:"same-origin"}).then(function(r){return r.json()})}
+        /* Firebase Auth (AA_FB_* constants): Google popup + email/password on Firebase's own
+           OAuth client, with Firebase sending verification / password-reset mails itself. */
+        var fbAuth=null;
+        if(window.AaFirebaseConfig&&window.firebase){try{fbAuth=firebase.initializeApp(window.AaFirebaseConfig).auth()}catch(x){fbAuth=null}}
+        function fbHandoff(tok,extra){var fd=new FormData();fd.append("action","aa_fb_login");fd.append("nonce",card.dataset.nonce);fd.append("idtoken",tok);if(extra)Object.keys(extra).forEach(function(k){fd.append(k,extra[k])});return fetch("/wp-admin/admin-ajax.php",{method:"POST",body:fd,credentials:"same-origin"}).then(function(r){return r.json()})}
+        function fbShowVerify(em){var e2=card.querySelector("[data-aa-vemail]");if(e2&&em)e2.textContent=em;var m2=card.querySelector("[data-aa-vmail]");if(m2)m2.style.display="none";pane("verify")}
+        function fbDone(d){if(d&&d.status==="ok"){if(d.verified===false){fbShowVerify(d.email)}else{location.href=(d.redirect)||"/library/"}}else{showErr((d&&d.msg)||"Sign-in could not finish — please try again.")}}
+        function fbErr(e){var m={"auth/email-already-in-use":"An account with this email already exists — sign in instead.","auth/weak-password":"That password is too weak — use at least 8 characters.","auth/invalid-email":"That email address doesn't look right.","auth/wrong-password":"Wrong email or password — try again.","auth/invalid-credential":"Wrong email or password — try again.","auth/user-not-found":"No account with that email yet — create one below.","auth/too-many-requests":"Too many attempts — wait a minute and try again.","auth/popup-closed-by-user":"Google sign-in was cancelled.","auth/cancelled-popup-request":"Google sign-in was cancelled.","auth/popup-blocked":"Your browser blocked the Google popup — allow popups and try again.","auth/unauthorized-domain":"This domain is not authorized in the Firebase console yet (Authentication → Settings → Authorized domains).","auth/network-request-failed":"Network error — check your connection."};showErr((e&&m[e.code])||(e&&e.message)||"Something went wrong — please try again.")}
+        var gfb=card.querySelector("[data-aa-fbgoogle]");
+        if(gfb&&fbAuth){gfb.addEventListener("click",function(){hideErr();gfb.disabled=true;fbAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).then(function(res){return res.user.getIdToken().then(function(t){return fbHandoff(t,{provider:"google"})})}).then(fbDone).catch(fbErr).then(function(){gfb.disabled=false})})}
         var lf=card.querySelector("[data-aa-login]");
-        if(lf){lf.addEventListener("submit",function(e){e.preventDefault();hideErr();var fd=new FormData(lf);fd.append("action","aa_login_submit");post(fd).then(function(d){if(d&&d.status==="ok"){location.href=(d.redirect)||location.href}else{showErr((d&&d.msg)||"Sign-in failed — check your details.")}}).catch(function(){showErr("Network error — please try again.")})})}
+        if(lf&&fbAuth){var fp=lf.querySelector("a");if(fp){fp.addEventListener("click",function(e){e.preventDefault();var em=lf.aa_login_id.value.trim();if(!em){showErr("Type your email above, then click Forgot password.");return}fbAuth.sendPasswordResetEmail(em,{url:location.origin+"/my-account/"}).then(function(){var m="Password reset email sent to "+em+" — check your inbox (and spam).";if(window.aaToast)aaToast(m);else showErr(m)}).catch(fbErr)})}}
+        if(lf){lf.addEventListener("submit",function(e){e.preventDefault();hideErr();if(fbAuth){var em=lf.aa_login_id.value.trim(),pw=lf.aa_login_pass.value,btn=lf.querySelector(".aa-auth-btn");if(!em||!pw){showErr("Enter your email and password.");return}if(btn)btn.disabled=true;fbAuth.signInWithEmailAndPassword(em,pw).then(function(res){return res.user.getIdToken().then(function(t){return fbHandoff(t).then(function(d){if(d&&d.status==="ok"&&d.verified===false){res.user.sendEmailVerification({url:location.origin+"/my-account/"}).catch(function(){});fbShowVerify(res.user.email)}else{fbDone(d)}})})}).catch(fbErr).then(function(){if(btn)btn.disabled=false})}else{var fd=new FormData(lf);fd.append("action","aa_login_submit");post(fd).then(function(d){if(d&&d.status==="ok"){location.href=(d.redirect)||location.href}else{showErr((d&&d.msg)||"Sign-in failed — check your details.")}}).catch(function(){showErr("Network error — please try again.")})}})}
         var rf=card.querySelector("[data-aa-register]");
-        if(rf){rf.addEventListener("submit",function(e){e.preventDefault();hideErr();var fd=new FormData(rf);fd.append("action","aa_register_submit");post(fd).then(function(d){if(d&&d.status==="ok"&&d.verified===false){var em=card.querySelector("[data-aa-vemail]");if(em)em.textContent=d.email||"";var mv=card.querySelector("[data-aa-vmail]");if(mv&&d.mail===false){mv.textContent="Heads up: this server cannot send email yet (SMTP not configured). The admin can verify your account from the admin panel, or set the free AA_SMTP_* constants in wp-config.";mv.style.display="block"}pane("verify")}else if(d&&d.status==="ok"){location.href=(d.redirect)||location.href}else{showErr((d&&d.msg)||"Could not create the account.")}}).catch(function(){showErr("Network error — please try again.")})})}
+        if(rf){rf.addEventListener("submit",function(e){e.preventDefault();hideErr();if(fbAuth){var nm=rf.aa_reg_name.value.trim(),em=rf.aa_reg_email.value.trim(),pw=rf.aa_reg_pass.value,btn=rf.querySelector(".aa-auth-btn");if(!nm||!em||pw.length<8){showErr("Fill your name, a valid email and a password of at least 8 characters.");return}if(btn)btn.disabled=true;fbAuth.createUserWithEmailAndPassword(em,pw).then(function(res){return res.user.updateProfile({displayName:nm}).then(function(){return res.user.sendEmailVerification({url:location.origin+"/my-account/"})}).then(function(){return res.user.getIdToken()}).then(function(t){return fbHandoff(t,{name:nm,provider:"password"})})}).then(function(d){if(d&&d.status==="ok"){fbShowVerify(d.email||em)}else{fbDone(d)}}).catch(fbErr).then(function(){if(btn)btn.disabled=false})}else{var fd=new FormData(rf);fd.append("action","aa_register_submit");post(fd).then(function(d){if(d&&d.status==="ok"&&d.verified===false){var em=card.querySelector("[data-aa-vemail]");if(em)em.textContent=d.email||"";var mv=card.querySelector("[data-aa-vmail]");if(mv&&d.mail===false){mv.textContent="Heads up: this server cannot send email yet (SMTP not configured). The admin can verify your account from the admin panel, or set the free AA_SMTP_* constants in wp-config.";mv.style.display="block"}pane("verify")}else if(d&&d.status==="ok"){location.href=(d.redirect)||location.href}else{showErr((d&&d.msg)||"Could not create the account.")}}).catch(function(){showErr("Network error — please try again.")})}})}
         var rs=card.querySelector("[data-aa-resend]");
-        if(rs){rs.addEventListener("click",function(){rs.disabled=true;var n=card.querySelector("[data-aa-resend-note]");if(n)n.textContent="Sending…";var fd=new FormData();fd.append("action","aa_resend_verify");fetch("/wp-admin/admin-ajax.php",{method:"POST",body:fd,credentials:"same-origin"}).then(function(r){return r.json()}).then(function(d){if(n){n.textContent=(d&&d.msg)||"Sent.";n.style.color=(d&&d.status==="ok")?"#34d399":"#ff8a80"}setTimeout(function(){rs.disabled=false},4000)}).catch(function(){if(n)n.textContent="Network error.";rs.disabled=false})})}
+        if(rs){rs.addEventListener("click",function(){rs.disabled=true;var n=card.querySelector("[data-aa-resend-note]");if(n)n.textContent="Sending…";if(fbAuth&&fbAuth.currentUser){fbAuth.currentUser.sendEmailVerification({url:location.origin+"/my-account/"}).then(function(){if(n){n.textContent="Confirmation email sent — check your inbox (and spam).";n.style.color="#34d399"}setTimeout(function(){rs.disabled=false},4000)}).catch(function(e2){if(n){n.textContent=(e2&&e2.message)||"Could not send — try again.";n.style.color="#ff8a80"}rs.disabled=false});return}var fd=new FormData();fd.append("action","aa_resend_verify");fetch("/wp-admin/admin-ajax.php",{method:"POST",body:fd,credentials:"same-origin"}).then(function(r){return r.json()}).then(function(d){if(n){n.textContent=(d&&d.msg)||"Sent.";n.style.color=(d&&d.status==="ok")?"#34d399":"#ff8a80"}setTimeout(function(){rs.disabled=false},4000)}).catch(function(){if(n)n.textContent="Network error.";rs.disabled=false})})}
 })();
 </script>
         <?php
@@ -841,6 +864,41 @@ function aa_profile_dashboard_html() {
         </div>
         <a class="aa-prof-logout" href="<?php echo esc_url( wp_logout_url( home_url( '/' ) ) ); ?>"><span class="aa-ms">logout</span><span>Log out</span></a>
 </div></section>
+        <?php if ( function_exists( 'aa_fb_active' ) && aa_fb_active() ) : ?>
+        <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+        <script>
+        window.AaFirebaseConfig=<?php echo wp_json_encode( aa_fb_js_config() ); ?>;
+        (function(){
+                try{var auth=firebase.initializeApp(window.AaFirebaseConfig).auth()}catch(x){return}
+                /* Sign out of Firebase too — otherwise the SDK's saved session would
+                   sign the reader straight back in after the WP logout redirect. */
+                document.addEventListener("click",function(e){
+                        var a=e.target&&e.target.closest?e.target.closest(".aa-prof-logout"):null;
+                        if(!a)return;
+                        e.preventDefault();
+                        var go=function(){location.href=a.getAttribute("href")||"/"};
+                        try{auth.signOut().then(go,go)}catch(x){go()}
+                },true);
+                <?php if ( aa_email_is_verified( $uid ) ) : ?>
+                return; // verified — nothing to sync
+                <?php endif; ?>
+                /* One-time sync: the reader just clicked the Firebase verification link and
+                   came back. Refresh the ID token so the server flips the verified flag and
+                   unlocks downloads. Only reloads when the verification actually landed. */
+                auth.onAuthStateChanged(function(fu){
+                        if(!fu||!fu.emailVerified)return;
+                        fu.getIdToken(true).then(function(t){
+                                var fd=new FormData();
+                                fd.append("action","aa_fb_login");
+                                fd.append("nonce","<?php echo esc_js( wp_create_nonce( 'aa_auth' ) ); ?>");
+                                fd.append("idtoken",t);
+                                return fetch("/wp-admin/admin-ajax.php",{method:"POST",body:fd,credentials:"same-origin"}).then(function(r){return r.json()});
+                        }).then(function(d){if(d&&d.status==="ok"&&d.verified){location.reload()}});
+                });
+        })();
+        </script>
+        <?php endif; ?>
         <?php
         return ob_get_clean();
 }
