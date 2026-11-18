@@ -294,17 +294,29 @@ The two scripts in `tools/` recreate everything from scratch (they assume a fres
 WordPress install; paths are relative to the repo root). They are reference
 implementations — incremental edits are normally done via wp-admin or wp-cli.
 
-## Production deploy path (later)
+## Production deploy path (Hostinger) — READY
 
-This dev copy now runs on **MySQL 8.4** — the same engine family as the
-Hostinger production site, so moving is a straight data hand-off:
+Everything needed to go live lives in [`hostable/`](hostable/README.md):
 
-1. **mysqldump (simplest now):** `docker compose exec db sh -c 'mysqldump -uwp -pwp wordpress' > db.sql`,
-   import it on the Hostinger MySQL, run `wp search-replace` for the URL, done.
-2. **WP export/import:** wp-admin → Tools → Export, then import on production
-   (media files need a separate copy of `wp-content/uploads`).
-3. In both cases: update the site URL (`wp search-replace`), change the admin
-   password, switch the store to real payment gateway keys.
+- `hostable/annaadhya-ebooks-site.zip` — the entire website (production
+  `wp-config.php` inside, nothing SQLite-related), ready to upload & extract
+  into `public_html`
+- `hostable/annaadhya-ebooks.sql` — the complete MySQL database (all products,
+  users, orders, settings) for a phpMyAdmin import
+- `hostable/README.md` — the step-by-step Hostinger deployment guide
+  (upload → extract → DB credentials → import → URL fix → Firebase constants)
+
+Both artifacts are **verified end-to-end**: the dump was re-imported into an
+empty MySQL database and the extracted zip booted from it renders the full
+storefront (products, product pages, my-account, library) — never the default
+"Hello world!" (which is what an *empty* database gives you).
+
+The SQLite→MySQL conversion itself is reproducible:
+`php tools/migrate-sqlite-to-mysql.php` rebuilds the exact MySQL schema from
+the metadata the SQLite drop-in preserved and copies every row. It is also
+what the Docker entrypoint runs on boot — and it now re-imports the seed
+instead of no-oping when it finds a WordPress install that ran on an empty
+database (the "Hello world" trap).
 
 ## Repository notes
 
