@@ -1,13 +1,12 @@
 <?php
-# Database: MySQL / MariaDB.
-# Defaults match docker compose (services "web" + "mariadb"); every value can
-# be overridden with WORDPRESS_DB_* environment variables, which is how the
-# same config also works on Hostinger hPanel, tunnels and CI:
-#   WORDPRESS_DB_NAME / WORDPRESS_DB_USER / WORDPRESS_DB_PASSWORD / WORDPRESS_DB_HOST
-define( 'DB_NAME', getenv( 'WORDPRESS_DB_NAME' ) ?: 'wordpress' );
-define( 'DB_USER', getenv( 'WORDPRESS_DB_USER' ) ?: 'wp' );
+# Database: MySQL, served by the `db` service in docker-compose.yml (MySQL 8.4).
+# The WORDPRESS_DB_* variables come from docker-compose.yml; the fallbacks
+# below match them, so WP-CLI inside the container works out of the box.
+# For CLI runs outside docker set WORDPRESS_DB_HOST, e.g. 127.0.0.1:3306.
+define( 'DB_NAME',     getenv( 'WORDPRESS_DB_NAME' )     ?: 'wordpress' );
+define( 'DB_USER',     getenv( 'WORDPRESS_DB_USER' )     ?: 'wp' );
 define( 'DB_PASSWORD', getenv( 'WORDPRESS_DB_PASSWORD' ) ?: 'wp' );
-define( 'DB_HOST', getenv( 'WORDPRESS_DB_HOST' ) ?: 'mariadb' );
+define( 'DB_HOST',     getenv( 'WORDPRESS_DB_HOST' )     ?: 'db' );
 define( 'DB_CHARSET', 'utf8mb4' );
 define( 'DB_COLLATE', '' );
 
@@ -21,18 +20,6 @@ define( 'LOGGED_IN_SALT',   'O5i4U3y2T1r0E9w8Q7q6P5o4i3u2y1t0r9e8w7q6p5o' );
 define( 'NONCE_SALT',       'P4o3i2u1y0t9r8e7w6q5p4o3i2u1y0t9r8e7w6q5p4o' );
 
 $table_prefix = 'wp_';
-
-# --- Book delivery emails -----------------------------------------------
-# Every paid order emails the PDF to the buyer (no accounts anywhere). If
-# these are not defined, wp_mail() uses the host's built-in PHP mail(), which
-# works on shared hosting like Hostinger.
-#   define( 'AA_SMTP_HOST', 'smtp-relay.brevo.com' );
-#   define( 'AA_SMTP_PORT', 587 );
-#   define( 'AA_SMTP_USER', 'your-smtp-login' );
-#   define( 'AA_SMTP_PASS', 'your-smtp-key' );
-#   define( 'AA_SMTP_SECURE', 'tls' );
-#   define( 'AA_SMTP_FROM', 'store@yourdomain.com' );
-#   define( 'AA_SMTP_FROM_NAME', 'Annaadhya Ebooks' );
 
 # Portable media/asset URLs. WP core defines WP_CONTENT_URL from the RAW DB
 # siteurl during boot — before mu-plugins load — which would pin every
@@ -59,3 +46,15 @@ if ( ! defined( 'ABSPATH' ) ) {
         define( 'ABSPATH', __DIR__ . '/' );
 }
 require_once ABSPATH . 'wp-settings.php';
+
+# --- Book delivery emails -----------------------------------------------
+# Every paid order emails the PDF to the buyer (no accounts anywhere). If
+# these are not defined, wp_mail() uses the host's built-in PHP mail(), which
+# works on shared hosting like Hostinger:
+#   define( 'AA_SMTP_HOST', 'smtp-relay.brevo.com' );
+#   define( 'AA_SMTP_PORT', 587 );
+#   define( 'AA_SMTP_USER', 'your-smtp-login' );
+#   define( 'AA_SMTP_PASS', 'your-smtp-key' );
+#   define( 'AA_SMTP_SECURE', 'tls' );
+#   define( 'AA_SMTP_FROM', 'store@yourdomain.com' );
+#   define( 'AA_SMTP_FROM_NAME', 'Annaadhya Ebooks' );

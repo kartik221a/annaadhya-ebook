@@ -2,3 +2,7 @@
 Thumbs.db
 # Elementor generates per-environment CSS/assets at runtime - not site content
 site/wp-content/uploads/elementor/
+
+# SQLite WAL sidecars are ephemeral - only the main .ht.sqlite seed is tracked
+site/wp-content/database/**/*.sqlite-wal
+site/wp-content/database/**/*.sqlite-shm

@@ -2,7 +2,32 @@
 
 A complete WordPress + WooCommerce ebook store running on **MySQL/MariaDB**.
 The code (core, plugins, theme, media, mu-plugins) lives in this repository
-as plain files; the database boots from `docker compose`.
+as plain files; the store content ships in `hostable/annaadhya-ebooks.sql`
+and is imported into MySQL automatically on first boot.
+
+## Database: MySQL (was SQLite)
+
+The stack runs **WordPress on MySQL/MariaDB** (the `db` service in
+`docker-compose.yml`, data in the named volume). The old SQLite drop-in and
+its seed file are fully retired — the one-time migration is preserved in git
+history (`tools/migrate-sqlite-to-mysql.php` up to commit `e94d899`).
+
+- On the **first boot** the web container runs `tools/first-boot-import.php`:
+  an empty or "Hello world!" database is seeded from
+  `hostable/annaadhya-ebooks.sql` (the verified phpMyAdmin dump); a database
+  that already carries the store (or any real data) is left untouched.
+- **Content changes made via wp-admin / wp-cli live in the database volume**,
+  not in git. Snapshot them any time:
+  `docker compose exec db sh -c 'mysqldump -uwp -pwp wordpress' > db-backup.sql`.
+
+Useful commands:
+
+| | |
+|---|---|
+| Open a MySQL shell | `docker compose exec db mysql -uwp -pwp wordpress` |
+| Backup to a file | `docker compose exec db sh -c 'mysqldump -uwp -pwp wordpress' > db-backup.sql` |
+| Restore a backup | `docker compose exec -i db sh -c 'mysql -uwp -pwp wordpress' < db-backup.sql` |
+| Reset to the shipped seed | `docker compose down -v` (drops the volume) then `docker compose up` |
 
 ## Quick start (Docker — recommended)
 
@@ -11,21 +36,15 @@ git pull
 docker compose up
 ```
 
-Then open **http://localhost:8080** in your browser. WordPress (PHP 8.3 +
-Apache) and MariaDB 11.4 run as services; the database persists in the
-`db-data` volume. **The site is host-portable**: URLs follow whatever hostname
-you open it with (localhost, a LAN IP, a tunnel or the real domain), so
-`/web-admin`, links and assets always resolve — no search-replace needed when
-the domain changes.
+Then open **http://localhost:8080** in your browser. First `up` builds the web
+image (PHP 8.3 + Apache + `mysqli`/`pdo_mysql`/`opcache`) and starts MySQL —
+give it a minute or two. When the log shows the seed import (or on later
+boots, nothing at all), the store is served from MySQL. **The site is
+host-portable**: URLs follow whatever hostname you open it with (localhost, a
+LAN IP, a tunnel or the real domain), so `/web-admin`, links and assets always
+resolve — no search-replace needed when the domain changes.
 
 Stop with `Ctrl+C`. To rebuild after pulling changes: `git pull && docker compose up`.
-
-### First run on a fresh MariaDB
-
-An empty database needs the content imported once — use the ready dump in
-[`hostable/`](hostable/README.md): import `hostable/annaadhya-ebooks.sql`
-through phpMyAdmin (or `docker exec -i annaadhya-db mariadb -uwp -pwp wordpress
-< hostable/annaadhya-ebooks.sql`).
 
 ### Troubleshooting: "chmod: Operation not permitted" on startup
 
@@ -39,16 +58,21 @@ sudo chown -R $USER:$USER wp-content/uploads
 docker compose up
 ```
 
-## Quick start (no Docker — plain PHP + MariaDB)
+## Quick start (no Docker — plain PHP + MySQL)
+
+Any PHP 8.x with `mysqli` and `pdo_mysql`, plus any MySQL 8.x / MariaDB 10.4+:
 
 ```bash
 git pull
-# 1. run MariaDB somewhere (any 11.x is fine) and create db "wordpress", user wp/wp
-# 2. point the site at it:
-WORDPRESS_DB_HOST=127.0.0.1:3307 php -S 127.0.0.1:8080 -t site router.php
+export WORDPRESS_DB_HOST=127.0.0.1:3306
+export WORDPRESS_DB_NAME=wordpress WORDPRESS_DB_USER=wp WORDPRESS_DB_PASSWORD=wp
+# one-time: create db+user, then import the shipped seed dump:
+php tools/first-boot-import.php
+# run the site:
+php -S 127.0.0.1:8080 -t site router.php
 ```
 
-Open **http://127.0.0.1:8080**. Import `hostable/annaadhya-ebooks.sql` on first run.
+Open **http://127.0.0.1:8080**.
 
 ## Admin login (wp-admin)
 
@@ -66,7 +90,9 @@ touching production.
 | Path | Purpose |
 |---|---|
 | `site/` | The full WordPress installation (core + plugins + theme + uploads) |
-| `docker-compose.yml` + `docker/apache.conf` | One-command preview stack (PHP 8.3 + Apache) |
+| `docker-compose.yml` + `docker/` | One-command stack: web (PHP 8.3 + Apache + mysqli) and `db` (MySQL/MariaDB) |
+| `hostable/` | Production package: phpMyAdmin dump + site zip + deploy guide |
+| `tools/first-boot-import.php` | Seeds an empty/hello-world MySQL from `hostable/annaadhya-ebooks.sql` (runs automatically on boot) |
 | `router.php` | Runner for the no-Docker PHP built-in server option |
 | `tools/build_content.sh` | wp-cli script that generated pages, menu, products |
 | `tools/make_samples.py` | Python script that generated the sample covers + PDFs |
