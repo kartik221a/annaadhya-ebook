@@ -10,8 +10,14 @@
  * working as a seed snapshot for fresh clones of this repository.
  *
  * Safe to run any number of times:
- *   - If MySQL already has the WordPress tables, this is a no-op.
- *   - If something fails midway, nothing is archived and the SQLite site keeps working.
+ *   - No-op when the seed marker (wp_options.aa_seed_migrated) is present.
+ *   - Re-imports when the database is empty OR when it only contains a
+ *     default WordPress install (the "Hello world!" trap: an install that
+ *     ran on an empty DB before the seed import could happen).
+ *   - Protects real store data: no-op with a warning when the DB already
+ *     holds users AND products but no marker (older migrated volume); pass
+ *     --wipe to re-seed on purpose.
+ *   - If something fails midway, nothing is archived.
  *
  * Run inside the web container (docker compose exec web php tools/migrate-sqlite-to-mysql.php)
  * or from the entrypoint on every boot - it exits in milliseconds when there is nothing to do.
@@ -158,9 +164,45 @@ foreach ( $mysql->query( 'SHOW TABLES' )->fetchAll( PDO::FETCH_COLUMN ) as $t ) 
  * ------------------------------------------------------------------------- */
 
 if ( isset( $existing_tables[ $users_table ] ) && ! $wipe ) {
-        $count = (int) $mysql->query( "SELECT COUNT(*) FROM `{$users_table}`" )->fetchColumn();
-        $log( "MySQL already migrated ({$users_table}: {$count} users). Nothing to do." );
-        exit( 0 );
+        /* The seed marker is written by this script after every successful
+         * import (and shipped inside hostable/annaadhya-ebooks.sql), so any
+         * database that already carries the store content no-ops here. */
+        $marker_exists = false;
+        if ( isset( $existing_tables[ $prefix . 'options' ] ) ) {
+                $marker_exists = (int) $mysql->query(
+                        "SELECT COUNT(*) FROM `{$prefix}options` WHERE option_name = 'aa_seed_migrated'"
+                )->fetchColumn() > 0;
+        }
+        if ( $marker_exists ) {
+                $count = (int) $mysql->query( "SELECT COUNT(*) FROM `{$users_table}`" )->fetchColumn();
+                $log( "MySQL already carries the store seed ({$users_table}: {$count} users, marker present). Nothing to do." );
+                exit( 0 );
+        }
+
+        $user_count    = (int) $mysql->query( "SELECT COUNT(*) FROM `{$users_table}`" )->fetchColumn();
+        $product_count = 0;
+        if ( isset( $existing_tables[ $prefix . 'posts' ] ) ) {
+                $product_count = (int) $mysql->query(
+                        "SELECT COUNT(*) FROM `{$prefix}posts` WHERE post_type = 'product' AND post_status = 'publish'"
+                )->fetchColumn();
+        }
+
+        if ( $user_count > 0 && $product_count > 0 ) {
+                /* Real store data without a marker: an already-migrated volume
+                 * created by an older version of this script. Never wipe that. */
+                $warn( "Database has {$user_count} users and {$product_count} products but no seed marker -" );
+                $warn( 'this looks like REAL store data, so nothing was overwritten.' );
+                $warn( 'Run with --wipe to re-seed from the SQLite snapshot on purpose.' );
+                exit( 0 );
+        }
+
+        if ( $user_count > 0 ) {
+                $log( "{$users_table} has {$user_count} user(s) but 0 products - this is a default WordPress" );
+                $log( 'install on an empty database (the "Hello world!" state). Re-importing the store seed.' );
+        } else {
+                $log( 'Database is empty - importing the store seed.' );
+        }
+        $wipe = true; // fall through to the drop + rebuild path below
 }
 
 if ( ! empty( $existing_tables ) && ! $wipe ) {
@@ -406,6 +448,30 @@ if ( $mismatch ) {
         $warn( "{$mismatch} table(s) mismatched - MySQL kept as-is, SQLite site untouched. Fix and re-run." );
         exit( 1 );
 }
+
+/* Mark this database as seeded so future boots (and future versions of this
+ * script) know the store content is intentional and never wipe it. */
+$mysql->exec( "INSERT IGNORE INTO `{$prefix}options` (`option_name`, `option_value`, `autoload`)"
+        . " VALUES ('aa_seed_migrated', '" . gmdate( 'Y-m-d H:i:s' ) . "', 'no')" );
+
+/* The SQLite integration plugin belonged to the old stack; its folder is no
+ * longer shipped, so drop it from active_plugins (avoids the
+ * "Plugin file does not exist" notice in wp-admin). */
+$ap = $mysql->query( "SELECT option_value FROM `{$prefix}options` WHERE option_name = 'active_plugins'" )->fetchColumn();
+if ( $ap && false !== strpos( (string) $ap, 'sqlite-database-integration' ) ) {
+        $plugins = unserialize( (string) $ap );
+        if ( is_array( $plugins ) ) {
+                $plugins = array_values( array_filter( $plugins, static fn( $p ) => false === strpos( (string) $p, 'sqlite-database-integration' ) ) );
+                $clean = serialize( $plugins );
+                $st = $mysql->prepare( "UPDATE `{$prefix}options` SET option_value = ? WHERE option_name = 'active_plugins'" );
+                $st->execute( array( $clean ) );
+                $log( 'Removed sqlite-database-integration from active_plugins.' );
+        }
+}
+
+/* The plugin-update cache still lists the removed sqlite plugin (and stale
+ * version data for everything else). WP regenerates it, so just drop it. */
+$mysql->exec( "DELETE FROM `{$prefix}options` WHERE option_name = '_site_transient_update_plugins'" );
 
 rrmdir( $tmp_dir );
 
