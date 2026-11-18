@@ -105,9 +105,10 @@ the two files below are the whole site.
 ```bash
 docker compose up
 # store:    http://localhost:8080
-# database: mariadb service (db-data volume persists)
+# database: the db service (data persists in the named volume)
 ```
 
 The same repo runs WordPress on MySQL/MariaDB everywhere now — SQLite has
-been fully retired (`tools/migrate-sqlite-to-mysql.php` did the one-time
-data migration).
+been fully retired. On a fresh database the store seeds itself from this
+folder's dump on first boot (`tools/first-boot-import.php`, wired into the
+docker entrypoint).
