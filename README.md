@@ -1,8 +1,8 @@
-# Annaadhya eBooks — WordPress ebook store (dev preview)
+# Annaadhya eBooks — WordPress ebook store
 
-A complete, portable WordPress + WooCommerce ebook store. The **entire site lives in
-this repository as plain files** — WordPress core, plugins, theme, media, and the
-SQLite database — so `git pull` always gives you the latest state, ready to run.
+A complete WordPress + WooCommerce ebook store running on **MySQL/MariaDB**.
+The code (core, plugins, theme, media, mu-plugins) lives in this repository
+as plain files; the database boots from `docker compose`.
 
 ## Quick start (Docker — recommended)
 
@@ -11,14 +11,21 @@ git pull
 docker compose up
 ```
 
-Then open **http://localhost:8080** in your browser. That's it — no database setup,
-no MySQL, no config. The stack is WordPress running on SQLite via the official
-[SQLite Database Integration](https://wordpress.org/plugins/sqlite-database-integration/)
-plugin. **The site is host-portable**: URLs follow whatever hostname you open it
-with (localhost, a LAN IP, a tunnel or the real domain), so `/web-admin`, links
-and assets always resolve — no search-replace needed when the domain changes.
+Then open **http://localhost:8080** in your browser. WordPress (PHP 8.3 +
+Apache) and MariaDB 11.4 run as services; the database persists in the
+`db-data` volume. **The site is host-portable**: URLs follow whatever hostname
+you open it with (localhost, a LAN IP, a tunnel or the real domain), so
+`/web-admin`, links and assets always resolve — no search-replace needed when
+the domain changes.
 
 Stop with `Ctrl+C`. To rebuild after pulling changes: `git pull && docker compose up`.
+
+### First run on a fresh MariaDB
+
+An empty database needs the content imported once — use the ready dump in
+[`hostable/`](hostable/README.md): import `hostable/annaadhya-ebooks.sql`
+through phpMyAdmin (or `docker exec -i annaadhya-db mariadb -uwp -pwp wordpress
+< hostable/annaadhya-ebooks.sql`).
 
 ### Troubleshooting: "chmod: Operation not permitted" on startup
 
@@ -32,16 +39,16 @@ sudo chown -R $USER:$USER wp-content/uploads
 docker compose up
 ```
 
-## Quick start (no Docker — plain PHP)
-
-Any PHP 8.x with the `pdo_sqlite` extension works:
+## Quick start (no Docker — plain PHP + MariaDB)
 
 ```bash
 git pull
-php -S 127.0.0.1:8080 -t site router.php
+# 1. run MariaDB somewhere (any 11.x is fine) and create db "wordpress", user wp/wp
+# 2. point the site at it:
+WORDPRESS_DB_HOST=127.0.0.1:3307 php -S 127.0.0.1:8080 -t site router.php
 ```
 
-Open **http://127.0.0.1:8080**.
+Open **http://127.0.0.1:8080**. Import `hostable/annaadhya-ebooks.sql` on first run.
 
 ## Admin login (wp-admin)
 
@@ -58,7 +65,7 @@ touching production.
 
 | Path | Purpose |
 |---|---|
-| `site/` | The full WordPress installation (core + plugins + theme + SQLite DB) |
+| `site/` | The full WordPress installation (core + plugins + theme + uploads) |
 | `docker-compose.yml` + `docker/apache.conf` | One-command preview stack (PHP 8.3 + Apache) |
 | `router.php` | Runner for the no-Docker PHP built-in server option |
 | `tools/build_content.sh` | wp-cli script that generated pages, menu, products |
@@ -256,23 +263,23 @@ The two scripts in `tools/` recreate everything from scratch (they assume a fres
 WordPress install; paths are relative to the repo root). They are reference
 implementations — incremental edits are normally done via wp-admin or wp-cli.
 
-## Production deploy path (later)
+## Production deploy (Hostinger)
 
-This dev copy runs on SQLite; the Hostinger production site runs MySQL. When it's
-time to launch there are two clean routes:
+Everything you need ships in **[`hostable/`](hostable/README.md)**:
+`annaadhya-ebooks.sql` (phpMyAdmin import) + `annaadhya-ebooks-site.zip`
+(upload & extract into `public_html`). Step-by-step instructions are in
+`hostable/README.md` — database values go into `wp-config.php`, then the
+store is live. The SQLite stack was retired; `tools/migrate-sqlite-to-mysql.php`
+performed the one-time data migration and is kept as reference.
 
-1. **API provisioning (preferred):** Hostinger support whitelists our builder IP
-   (no DNS changes at all), then content is recreated on the live site via
-   wp-cli / REST API — same scripts, different target.
-2. **Manual migration:** export content from this site (wp-admin → Tools →
-   Export) and import into the production site, or use a migration plugin
-   (All-in-One WP Migration / Duplicator) from a machine that can reach the site.
-3. In both cases: update the site URL (`wp search-replace`), change the admin
-   password, switch the store to real payment gateway keys.
+After deploy: change the admin password, run the one-time URL search-replace,
+and add real payment gateway keys when ready (the demo checkout is COD; any
+gateway that marks an order paid triggers the delivery email automatically).
 
 ## Repository notes
 
-- The SQLite database (`site/wp-content/database/`) is tracked in git on purpose —
-  it IS the site. Commit after making changes so the next `git pull` sees them.
+- The MySQL database is NOT tracked in git — rebuild/refresh it from
+  `hostable/annaadhya-ebooks.sql` or migrate from a seed with
+  `tools/migrate-sqlite-to-mysql.php`.
 - Nothing here is committed to the production site; this repo is a self-contained
-  preview environment.
+  environment.

@@ -23,7 +23,7 @@ return <<<'HTML'
 	<p>You agree to give accurate information when creating an account and to keep your credentials confidential. You must be 18 or older, or have the consent of a parent or guardian, to purchase. You are responsible for activity that happens under your account &mdash; tell us immediately if you suspect unauthorized access.</p>
 
 	<h2>4. Purchases, pricing and delivery</h2>
-	<p>Prices are displayed in Indian Rupees and include GST where applicable. We may change prices at any time, but the price shown at the moment you place your order is the price you pay. Delivery happens electronically: the moment payment is confirmed, your download becomes available in <strong>My Library</strong> and by email. Delivery terms are detailed in our <a href="/digital-delivery-policy/">Digital Product Delivery Policy</a>.</p>
+	<p>Prices are displayed in Indian Rupees and include GST where applicable. We may change prices at any time, but the price shown at the moment you place your order is the price you pay. Delivery happens electronically: the moment payment is confirmed, your PDF is delivered by email, attachment included. Delivery terms are detailed in our <a href="/digital-delivery-policy/">Digital Product Delivery Policy</a>.</p>
 
 	<h2>5. Your license to the ebooks</h2>
 	<p>When you buy an ebook, you receive a personal, non-exclusive, non-transferable license to read it. You may keep copies on your own devices for personal reading. You may <strong>not</strong> share, resell, sublicense, upload, broadcast or redistribute the files, in whole or in part. Full usage rules live in our <a href="/copyright-policy/">Copyright Policy</a>.</p>

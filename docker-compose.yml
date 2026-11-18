@@ -7,6 +7,13 @@ services:
     volumes:
       - ./site:/var/www/html
       - ./docker/apache.conf:/etc/apache2/sites-available/000-default.conf:ro
+    environment:
+      WORDPRESS_DB_HOST: mariadb
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DB_USER: wp
+      WORDPRESS_DB_PASSWORD: wp
+    depends_on:
+      - mariadb
     # a2enmod rewrite: the php:8.3-apache image ships mod_rewrite DISABLED.
     # Without it, every pretty permalink (/shop/ etc.) returns Apache 404.
     # chmod makes the bind mount writable for the container user on any host OS.
@@ -20,3 +27,20 @@ services:
       echo '[entrypoint] NOTE: some files in wp-content could not be chmod-ed (they were created by a previous container run). Booting anyway - the site will still load.';
       exec apache2-foreground"
     restart: unless-stopped
+
+  mariadb:
+    image: mariadb:11.4
+    container_name: annaadhya-db
+    environment:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wp
+      MYSQL_PASSWORD: wp
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - db-data:/var/lib/mysql
+    ports:
+      - "127.0.0.1:3306:3306"
+    restart: unless-stopped
+
+volumes:
+  db-data:

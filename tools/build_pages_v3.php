@@ -87,20 +87,19 @@ if ( ! function_exists( 'aa_upsert_page' ) ) {
 
 /* ------------------------------------------------------------ 7. My Account */
 
-aa_upsert_page( 'my-account', 'My Account', array(
+aa_upsert_page( 'my-account', 'Wishlist', array(
         $aa_common_html . aa_nav_html( 'account' ),
-        aa_page_head( 'My Account', 'My <span class="aa-grad">Account</span>', 'Sign in with Google or email &mdash; your ebooks stay in your account forever.' ),
-        $aa_woo_css . '<section class="aa-woopage-wrap">[aa_auth]</section>',
+        aa_page_head( 'Wishlist', 'My <span class="aa-grad">Wishlist</span>', 'Books you hearted are saved right in your browser &mdash; tap the heart on any cover to add one.' ),
+        $aa_woo_css . '<section class="aa-woopage-wrap">[aa_wishlist_page]</section>',
         aa_footer_html(),
-), '[aa_auth]' );
+), '[aa_wishlist_page]' );
 
 /* ---------------------------------------------------------- 6. My Library */
 
-aa_upsert_page( 'library', 'My Library', array(
-        $aa_common_html . aa_nav_html( 'library' ),
-        aa_page_head( 'My Library', 'My <span class="aa-grad">Library</span>', 'Every ebook you own &mdash; 5 full downloads per purchase, re-download anytime, on any device.' ),
+aa_upsert_page( 'library', 'Books by Email', array(
+        $aa_common_html . aa_nav_html( '' ),
+        aa_page_head( 'Books by Email', 'Books by <span class="aa-grad">Email</span>', 'No account needed &mdash; after checkout the PDF files land in your inbox instantly, attachments included.' ),
         $aa_lib_css . '<section class="aa-lib-wrap">[aa_library]</section>',
-        $aa_lib_perks,
         aa_footer_html(),
 ), '[aa_library]' );
 
@@ -108,7 +107,7 @@ aa_upsert_page( 'library', 'My Library', array(
 
 aa_upsert_page( 'checkout', 'Checkout', array(
         $aa_common_html . aa_nav_html( '' ),
-        aa_page_head( 'Checkout', 'Secure <span class="aa-grad">Checkout</span>', '<span class="aa-ms" style="font-size:16px;color:var(--aa-goldbg);vertical-align:-3px">lock</span> 256-bit encrypted &middot; no address needed &mdash; it&rsquo;s all digital &middot; downloads appear in My Library instantly' ),
+        aa_page_head( 'Checkout', 'Secure <span class="aa-grad">Checkout</span>', '<span class="aa-ms" style="font-size:16px;color:var(--aa-goldbg);vertical-align:-3px">lock</span> 256-bit encrypted &middot; no address needed &mdash; it&rsquo;s all digital &middot; your PDFs arrive in your email instantly' ),
         $aa_woo_css . '<section class="aa-woopage">[woocommerce_checkout]</section>',
         aa_footer_html(),
 ), '[woocommerce_checkout]' );

@@ -194,13 +194,13 @@ function aa_drop_address_fields( $fields ) {
         return $fields;
 }
 
-/** Gold "Open My Library" CTA on the order-received screen. */
-add_filter( 'woocommerce_thankyou_order_received_text', 'aa_thankyou_library_cta', 20, 2 );
+/** Gold "check your email" note on the order-received screen. */
+add_filter( 'woocommerce_thankyou_order_received_text', 'aa_thankyou_email_note', 20, 2 );
 
-function aa_thankyou_library_cta( $text, $order ) {
-        $lib = get_permalink( get_page_by_path( 'library' ) );
-        if ( $lib ) {
-                $text .= ' <a class="aa-btn-gold" style="display:inline-flex;align-items:center;gap:8px;margin-left:12px;padding:10px 18px;border-radius:10px;background:var(--aa-goldbg,#f59e0b);color:var(--aa-ongold,#472a00);font-weight:700;text-decoration:none" href="' . esc_url( $lib ) . '"><span class="aa-ms">download</span><span>Open My Library to download</span></a>';
+function aa_thankyou_email_note( $text, $order ) {
+        $email = $order ? $order->get_billing_email() : '';
+        if ( $email ) {
+                $text .= ' <span class="aa-thanks-email" style="display:inline-flex;align-items:center;gap:8px;margin-left:12px;padding:10px 18px;border-radius:10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);color:var(--aa-goldbg,#f59e0b);font-weight:700"><span class="aa-ms">mark_email_read</span><span>Your PDF is on its way to ' . esc_html( $email ) . '</span></span>';
         }
         return $text;
 }
@@ -449,13 +449,6 @@ function aa_category_count_shortcode( $atts ) {
         return '<span class="aa-showing">Showing <strong>' . esc_html( $n ) . '</strong> ' . ( 1 === $n ? 'ebook' : 'ebooks' ) . '</span>';
 }
 
-/** Wishlist ids for the current user (empty array when guest). */
-function aa_get_wishlist() {
-        if ( ! is_user_logged_in() ) { return array(); }
-        $wl = get_user_meta( get_current_user_id(), '_aa_wishlist', true );
-        return is_array( $wl ) ? array_map( 'absint', $wl ) : array();
-}
-
 /** Render one Stitch-style book card for a product. */
 function aa_book_card( $product_id ) {
         $product = wc_get_product( $product_id );
@@ -502,8 +495,6 @@ function aa_book_card( $product_id ) {
 
         $add_url  = add_query_arg( 'add-to-cart', $product_id, home_url( '/' ) );
         $cart_cls = $product->supports( 'ajax_add_to_cart' ) ? 'add_to_cart_button ajax_add_to_cart' : 'add_to_cart_button';
-        $in_wish  = in_array( $product_id, aa_get_wishlist(), true );
-
         ob_start();
         ?>
 <li class="aa-card" data-price="<?php echo esc_attr( $active ); ?>" data-title="<?php echo esc_attr( $name ); ?>">
@@ -511,7 +502,7 @@ function aa_book_card( $product_id ) {
                 <a class="aa-media-link" href="<?php echo esc_url( $permalink ); ?>" aria-label="<?php echo esc_attr( $name ); ?>">
                         <img class="aa-cover" src="<?php echo esc_url( $img ); ?>" alt="<?php echo esc_attr( $name ); ?> ebook cover">
                 </a>
-                <button type="button" class="aa-wishbtn<?php echo $in_wish ? ' aa-on' : ''; ?>" data-id="<?php echo esc_attr( $product_id ); ?>" aria-label="Save to wishlist"><span class="aa-ms">favorite</span></button>
+                <button type="button" class="aa-wishbtn" data-id="<?php echo esc_attr( $product_id ); ?>" aria-label="Save to wishlist"><span class="aa-ms">favorite</span></button>
                 <span class="aa-fmt"><?php echo esc_html( $format ); ?></span>
                 <?php if ( $badge ) : ?>
                         <span class="aa-badge"><?php echo esc_html( $badge ); ?></span>
@@ -538,428 +529,113 @@ function aa_book_card( $product_id ) {
         <?php
         return ob_get_clean();
 }
-
 /* ------------------------------------------------------------------------
- * Wishlist: AJAX toggle + My Account endpoint.
+ * Wishlist — browser-local (no accounts anywhere on the store). The heart
+ * buttons in aa_footer_html() read/write localStorage; this AJAX endpoint
+ * turns the saved ids back into Stitch book cards for /my-account/.
  * ---------------------------------------------------------------------- */
 
-add_action( 'wp_ajax_aa_wishlist_toggle', 'aa_wishlist_toggle_ajax' );
-add_action( 'wp_ajax_nopriv_aa_wishlist_toggle', 'aa_wishlist_toggle_ajax' );
+add_action( 'wp_ajax_aa_wishlist_render', 'aa_wishlist_render_ajax' );
+add_action( 'wp_ajax_nopriv_aa_wishlist_render', 'aa_wishlist_render_ajax' );
 
-function aa_wishlist_toggle_ajax() {
-        if ( ! is_user_logged_in() ) {
-                wp_send_json( array( 'status' => 'login' ) );
-        }
-        $id = isset( $_POST['id'] ) ? absint( $_POST['id'] ) : 0;
-        if ( ! $id || 'product' !== get_post_type( $id ) ) {
-                wp_send_json( array( 'status' => 'error' ), 400 );
-        }
-        $uid = get_current_user_id();
-        $wl  = aa_get_wishlist();
-        $on  = true;
-        $key = array_search( $id, $wl, true );
-        if ( false !== $key ) {
-                unset( $wl[ $key ] );
-                $wl = array_values( $wl );
-                $on = false;
-        } else {
-                $wl[] = $id;
-        }
-        update_user_meta( $uid, '_aa_wishlist', $wl );
-        wp_send_json( array( 'status' => 'ok', 'on' => $on, 'count' => count( $wl ) ) );
-}
-
-add_action( 'init', 'aa_register_wishlist_endpoint' );
-
-function aa_register_wishlist_endpoint() {
-        add_rewrite_endpoint( 'wishlist', EP_ROOT | EP_PAGES );
-}
-
-add_filter( 'woocommerce_account_menu_items', 'aa_wishlist_menu_item' );
-
-function aa_wishlist_menu_item( $items ) {
-        if ( isset( $items['downloads'] ) ) {
-                $new = array();
-                foreach ( $items as $k => $v ) {
-                        $new[ $k ] = $v;
-                        if ( 'downloads' === $k ) { $new['wishlist'] = __( 'Wishlist', 'aa' ); }
+function aa_wishlist_render_ajax() {
+        $ids = isset( $_POST['ids'] ) ? array_map( 'absint', (array) $_POST['ids'] ) : array();
+        $ids = array_values( array_unique( array_filter( array_slice( $ids, 0, 60 ) ) ) );
+        $html = '';
+        if ( $ids ) {
+                $q = new WP_Query(
+                        array(
+                                'post_type'           => 'product',
+                                'post_status'         => 'publish',
+                                'post__in'            => $ids,
+                                'orderby'             => 'post__in',
+                                'posts_per_page'      => count( $ids ),
+                                'ignore_sticky_posts' => true,
+                        )
+                );
+                while ( $q->have_posts() ) {
+                        $q->the_post();
+                        $html .= aa_book_card( get_the_ID() ); // phpcs:ignore WordPress.Security.EscapeOutput
                 }
-                return $new;
+                wp_reset_postdata();
         }
-        $items['wishlist'] = __( 'Wishlist', 'aa' );
-        return $items;
-}
-
-add_action( 'woocommerce_account_wishlist_endpoint', 'aa_wishlist_endpoint_content' );
-
-function aa_wishlist_endpoint_content() {
-        $wl = aa_get_wishlist();
-        if ( empty( $wl ) ) {
-                echo '<div class="aa-account-empty"><span class="aa-ms">favorite</span><h3>Nothing saved yet</h3><p>Tap the heart on any book cover to keep it here for later.</p><a class="aa-btn-gold" href="' . esc_url( get_permalink( wc_get_page_id( 'shop' ) ) ) . '">Browse the Bookshelf</a></div>';
-                return;
-        }
-        $q = new WP_Query(
-                array(
-                        'post_type'           => 'product',
-                        'post_status'         => 'publish',
-                        'post__in'            => $wl,
-                        'orderby'             => 'post__in',
-                        'posts_per_page'      => count( $wl ),
-                        'ignore_sticky_posts' => true,
-                )
-        );
-        echo '<div class="aa-books aa-wishlist-grid"><ul class="aa-products">';
-        while ( $q->have_posts() ) {
-                $q->the_post();
-                echo aa_book_card( get_the_ID() ); // phpcs:ignore WordPress.Security.EscapeOutput
-        }
-        wp_reset_postdata();
-        echo '</ul></div>';
+        wp_send_json( array( 'status' => 'ok', 'count' => count( $ids ), 'html' => $html ) );
 }
 
 /* ------------------------------------------------------------------------
- * [aa_auth] — Stitch auth screen: Google + email/password, and the
- * signed-in profile dashboard. Woo endpoints (orders, edit-account,
- * wishlist…) still render through [woocommerce_my_account].
+ * [aa_wishlist_page] — the /my-account/ screen. There is no sign-in any
+ * more: the page renders the browser's saved wishlist, and the few
+ * WooCommerce endpoints that still exist (orders, view-order...) keep
+ * their normal chrome.
  * ---------------------------------------------------------------------- */
 
-add_shortcode( 'aa_auth', 'aa_auth_shortcode' );
+add_shortcode( 'aa_wishlist_page', 'aa_wishlist_page_shortcode' );
 
-function aa_auth_is_woo_endpoint() {
-        if ( ! function_exists( 'is_wc_endpoint_url' ) ) { return false; }
-        foreach ( array( 'orders', 'view-order', 'edit-account', 'edit-address', 'downloads', 'wishlist', 'lost-password', 'customer-logout' ) as $ep ) {
-                if ( is_wc_endpoint_url( $ep ) ) { return true; }
-        }
-        return false;
-}
-
-/**
- * Google sign-in goes live the moment Nextend Social Login has the Google
- * provider configured (Client ID + Secret) and enabled. Until then the auth
- * card shows the friendly "use email meanwhile" fallback, so the design is
- * final but nothing half-works.
- */
-function aa_auth_google_active() {
-        if ( ! class_exists( 'NextendSocialLogin', false ) && ! did_action( 'nsl_init' ) ) { return false; }
-        $main = get_option( 'nextend_social_login' );
-        if ( ! is_array( $main ) || empty( $main['enabled'] ) || ! in_array( 'google', (array) $main['enabled'], true ) ) { return false; }
-        $g = get_option( 'nsl_google' );
-        if ( ! is_array( $g ) || empty( $g['client_id'] ) || empty( $g['client_secret'] ) ) { return false; }
-        return true;
-}
-
-function aa_auth_shortcode() {
-        if ( aa_auth_is_woo_endpoint() ) {
+function aa_wishlist_page_shortcode() {
+        if ( function_exists( 'is_wc_endpoint_url' ) && is_wc_endpoint_url() ) {
                 return '<div class="aa-woopage">' . do_shortcode( '[woocommerce_my_account]' ) . '</div>';
         }
-
-        if ( is_user_logged_in() ) { return aa_profile_dashboard_html(); }
-
-        $nonce  = wp_create_nonce( 'aa_auth' );
-        $fb     = function_exists( 'aa_fb_active' ) ? aa_fb_active() : false;
-        $google = function_exists( 'aa_oauth_active' ) ? aa_oauth_active() : aa_auth_google_active();
-        $g_url  = $google ? esc_url( home_url( '/oauth/start?redirect_to=' . urlencode( home_url( '/library/' ) ) ) ) : '';
 
         ob_start();
         ?>
 <style>
-.aa-auth{padding:56px 0 72px;background:radial-gradient(closest-side,rgba(245,158,11,.07),transparent 70%) no-repeat 50% 0/var(--aa-wrapw,1px) 420px,var(--aa-bg)}
-.aa-auth-card{max-width:480px;margin:0 auto;background:var(--aa-surface);border:1px solid var(--aa-line);border-radius:16px;padding:34px 34px 30px;box-shadow:0 24px 60px rgba(0,0,0,.45)}
-.aa-auth-tabs{display:flex;gap:24px;border-bottom:1px solid var(--aa-line);margin-bottom:26px}
-.aa-auth-tab{background:none;border:0;color:var(--aa-dim);font:600 14px/1 inherit;font-family:inherit;padding:0 2px 12px;cursor:pointer;border-bottom:2px solid transparent;letter-spacing:.02em}
-.aa-auth-tab.aa-on{color:var(--aa-tx);border-bottom-color:var(--aa-goldbg)}
-.aa-auth-sub{color:var(--aa-dim);font-size:13px;line-height:1.6;margin:-8px 0 22px}
-.aa-gbtn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;background:#fff;color:#1f1f1f;font:700 14px/1 inherit;font-family:inherit;border:0;border-radius:10px;padding:14px 18px;cursor:pointer;text-decoration:none!important}
-.aa-gbtn:hover{background:#f3f4f6}
-.aa-gbtn svg{width:19px;height:19px}
-.aa-auth-div{display:flex;align-items:center;gap:12px;margin:20px 0;color:var(--aa-dim);font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase}
-.aa-auth-div::before,.aa-auth-div::after{content:"";flex:1;height:1px;background:var(--aa-line)}
-.aa-field{display:block;margin-bottom:14px}
-.aa-field>span{display:block;font-size:12px;font-weight:700;color:var(--aa-warm);margin-bottom:7px;letter-spacing:.02em}
-.aa-field input{width:100%;background:var(--aa-low);border:1px solid var(--aa-line);border-radius:10px;color:var(--aa-tx);padding:13px 14px;font-size:14px;font-family:inherit;outline:none}
-.aa-field input:focus{border-color:var(--aa-goldbg)}
-.aa-auth-row{display:flex;align-items:center;justify-content:space-between;margin:4px 0 18px;font-size:13px;color:var(--aa-dim)}
-.aa-auth-row label{display:flex;align-items:center;gap:8px;cursor:pointer}
-.aa-auth-row a{color:var(--aa-goldbg);text-decoration:none;font-weight:600}
-.aa-auth-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:var(--aa-goldbg);color:var(--aa-ongold);font:700 14.5px/1 inherit;font-family:inherit;border:0;border-radius:10px;padding:15px 18px;cursor:pointer}
-.aa-auth-btn:hover{background:var(--aa-gold)}
-.aa-auth-fine{color:var(--aa-dim);font-size:12px;line-height:1.7;margin:18px 0 0;text-align:center}
-.aa-auth-fine a{color:var(--aa-goldbg);text-decoration:none}
-.aa-auth-pane[hidden]{display:none}
-.aa-auth-err{display:none;background:rgba(255,77,77,.08);border:1px solid rgba(255,77,77,.35);color:#ff8a80;border-radius:10px;padding:11px 14px;font-size:13px;margin-bottom:16px}
-.aa-auth-err.aa-show{display:block}
-.aa-verify-ic{width:64px;height:64px;border-radius:50%;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);display:flex;align-items:center;justify-content:center;margin:6px auto 18px}
-.aa-verify-ic .aa-ms{font-size:32px;color:var(--aa-goldbg)}
-.aa-auth-continue{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:14px;background:var(--aa-cont);border:1px solid var(--aa-line2);color:var(--aa-tx)!important;font-weight:600;font-size:14px;padding:13px 18px;border-radius:10px;text-decoration:none!important}
-.aa-auth-continue:hover{border-color:var(--aa-gold);color:var(--aa-gold)!important}
-.aa-toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:var(--aa-high);color:var(--aa-tx);border:1px solid var(--aa-line);border-radius:12px;padding:13px 20px;font-size:13.5px;z-index:9999;box-shadow:0 12px 40px rgba(0,0,0,.5);display:none;max-width:88vw;text-align:center}
-@media(max-width:560px){.aa-auth-card{padding:26px 20px}}
+.aa-wishpage{padding:48px 0 80px}
+.aa-wishpage .aa-wrap{max-width:var(--aa-wrapw,1180px);margin:0 auto;padding:0 24px}
+.aa-wish-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:22px;list-style:none;padding:0;margin:0}
+.aa-account-empty{background:var(--aa-surface);border:1px solid var(--aa-line);border-radius:16px;padding:56px 28px;text-align:center}
+.aa-account-empty .aa-ms{font-size:40px;color:var(--aa-goldbg)}
+.aa-account-empty h3{color:var(--aa-tx);font-size:19px;margin:14px 0 8px}
+.aa-account-empty p{color:var(--aa-dim);font-size:14px;line-height:1.7;margin:0 auto 22px;max-width:420px}
+.aa-btn-gold{display:inline-flex;align-items:center;gap:8px;background:var(--aa-goldbg,#f59e0b);color:var(--aa-ongold,#472a00);font-weight:700;text-decoration:none!important;border-radius:10px;padding:13px 22px;font-size:14px}
+.aa-wish-loading{color:var(--aa-dim);font-size:14px;padding:26px 0}
 </style>
-<section class="aa-auth"><div class="aa-wrap"><div class="aa-auth-card" data-aa-authcard data-nonce="<?php echo esc_attr( $nonce ); ?>">
-        <div class="aa-auth-tabs">
-                <button type="button" class="aa-auth-tab aa-on" data-pane="signin">Sign in</button>
-                <button type="button" class="aa-auth-tab" data-pane="register">Create account</button>
+<section class="aa-wishpage">
+        <div class="aa-wrap">
+                <div data-aa-wishgrid><p class="aa-wish-loading">Loading your wishlist&hellip;</p></div>
         </div>
-        <p class="aa-auth-sub">Your ebooks stay in your account forever &mdash; each purchase includes 5 full downloads.</p>
-        <div class="aa-auth-err" data-aa-auth-err></div>
-
-        <div class="aa-auth-pane" data-aa-pane="signin">
-                <?php if ( $fb ) : ?>
-                        <button type="button" class="aa-gbtn" data-aa-fbgoogle>
-                                <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.5l6.7-6.7C35.6 2.4 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.8 6.1C12.3 13.2 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 7l7.6 5.9c4.4-4.1 6.7-10.1 6.7-17.4z"/><path fill="#FBBC05" d="M10.4 28.7a14.5 14.5 0 0 1 0-9.4l-7.8-6.1a24 24 0 0 0 0 21.6l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.4-5.6l-7.6-5.9c-2.1 1.4-4.8 2.3-7.8 2.3-6.3 0-11.7-3.7-13.6-8.9l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
-                                <span>Continue with Google</span>
-                        </button>
-                        <div class="aa-auth-div"><span>or continue with email</span></div>
-                <?php elseif ( $g_url ) : ?>
-                        <a class="aa-gbtn" href="<?php echo $g_url; ?>">
-                                <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.5l6.7-6.7C35.6 2.4 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.8 6.1C12.3 13.2 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 7l7.6 5.9c4.4-4.1 6.7-10.1 6.7-17.4z"/><path fill="#FBBC05" d="M10.4 28.7a14.5 14.5 0 0 1 0-9.4l-7.8-6.1a24 24 0 0 0 0 21.6l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.4-5.6l-7.6-5.9c-2.1 1.4-4.8 2.3-7.8 2.3-6.3 0-11.7-3.7-13.6-8.9l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
-                                <span>Continue with Google</span>
-                        </a>
-                        <div class="aa-auth-div"><span>or continue with email</span></div>
-                <?php else : ?>
-                        <button type="button" class="aa-gbtn" data-aa-google="0">
-                                <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.5l6.7-6.7C35.6 2.4 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.8 6.1C12.3 13.2 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 7l7.6 5.9c4.4-4.1 6.7-10.1 6.7-17.4z"/><path fill="#FBBC05" d="M10.4 28.7a14.5 14.5 0 0 1 0-9.4l-7.8-6.1a24 24 0 0 0 0 21.6l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.4-5.6l-7.6-5.9c-2.1 1.4-4.8 2.3-7.8 2.3-6.3 0-11.7-3.7-13.6-8.9l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
-                                <span>Continue with Google</span>
-                        </button>
-                        <div class="aa-auth-div"><span>or continue with email</span></div>
-                <?php endif; ?>
-                <form method="post" data-aa-login novalidate>
-                        <label class="aa-field"><span>Email or username</span><input type="text" name="aa_login_id" autocomplete="username" placeholder="you@example.com" required></label>
-                        <label class="aa-field"><span>Password</span><input type="password" name="aa_login_pass" autocomplete="current-password" placeholder="Your password" required></label>
-                        <div class="aa-auth-row">
-                                <label><input type="checkbox" name="aa_remember" checked> Remember me</label>
-                                <a href="<?php echo esc_url( wp_lostpassword_url( home_url( '/my-account/' ) ) ); ?>">Forgot password?</a>
-                        </div>
-                        <button class="aa-auth-btn" type="submit"><span class="aa-ms">login</span><span>Sign in</span></button>
-                </form>
-                <p class="aa-auth-fine">New to Annaadhya? <a href="#" data-switch="register">Create an account</a></p>
-        </div>
-
-        <div class="aa-auth-pane" data-aa-pane="register" hidden>
-                <form method="post" data-aa-register novalidate>
-                        <label class="aa-field"><span>Full name</span><input type="text" name="aa_reg_name" autocomplete="name" placeholder="Ananya Sharma" required></label>
-                        <label class="aa-field"><span>Email address</span><input type="email" name="aa_reg_email" autocomplete="email" placeholder="you@example.com" required></label>
-                        <label class="aa-field"><span>Password <em style="color:var(--aa-dim);font-style:normal">(min 8 characters)</em></span><input type="password" name="aa_reg_pass" autocomplete="new-password" minlength="8" placeholder="Create a password" required></label>
-                        <button class="aa-auth-btn" type="submit"><span class="aa-ms">person_add</span><span>Create account</span></button>
-                </form>
-                <p class="aa-auth-fine">By creating an account you agree to our <a href="/terms/">Terms</a> and <a href="/privacy-policy/">Privacy Policy</a>.</p>
-        </div>
-
-        <div class="aa-auth-pane" data-aa-pane="verify" hidden>
-                <div class="aa-verify-ic"><span class="aa-ms">mark_email_read</span></div>
-                <h3 style="color:var(--aa-tx);font-size:19px;margin:0 0 10px;text-align:center">Check your inbox</h3>
-                <p class="aa-auth-sub" style="text-align:center">We sent a confirmation link to <strong style="color:var(--aa-gold)" data-aa-vemail></strong>. Click it once to verify your email — that unlocks ebook downloads in your account.</p>
-                <p class="aa-auth-sub" data-aa-vmail style="display:none;background:rgba(255,180,80,.08);border:1px solid rgba(245,158,11,.35);border-radius:10px;padding:11px 14px;color:var(--aa-warm)"></p>
-                <button class="aa-auth-btn" type="button" data-aa-resend><span class="aa-ms">forward_to_inbox</span><span>Resend confirmation email</span></button>
-                <p style="text-align:center;margin:12px 0 0"><span data-aa-resend-note style="font-size:12.5px;color:var(--aa-dim)"></span></p>
-                <a class="aa-auth-continue" href="/library/"><span>Continue to the store &rarr;</span></a>
-        </div>
-</div></div></section>
-        <?php if ( $fb ) : ?>
-        <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-        <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-        <script>window.AaFirebaseConfig=<?php echo wp_json_encode( aa_fb_js_config() ); ?>;</script>
-        <?php endif; ?>
+</section>
 <script>
 (function(){
-        var card=document.querySelector("[data-aa-authcard]");if(!card)return;
-        var err=card.querySelector("[data-aa-auth-err]");
-        function showErr(m){if(err){err.textContent=m;err.classList.add("aa-show");}}
-        function hideErr(){if(err)err.classList.remove("aa-show");}
-        var tabs=card.querySelectorAll(".aa-auth-tab"),panes=card.querySelectorAll("[data-aa-pane]");
-        function pane(id){tabs.forEach(function(t){t.classList.toggle("aa-on",t.dataset.pane===id)});panes.forEach(function(p){p.hidden=(p.dataset.aaPane!==id)});hideErr();}
-        tabs.forEach(function(t){t.addEventListener("click",function(){pane(t.dataset.pane)})});
-        card.querySelectorAll("[data-switch]").forEach(function(a){a.addEventListener("click",function(e){e.preventDefault();pane(a.dataset.switch)})});
-        var g=card.querySelector("[data-aa-google]");
-        if(g){g.addEventListener("click",function(){if(window.aaToast)aaToast("Google sign-in needs a free one-time setup (see README → Sign-in options). Email sign-in works right now.");else showErr("Google sign-in needs a free one-time setup. Email sign-in works right now.")})}
-        function post(fd){fd.append("nonce",card.dataset.nonce);return fetch("/wp-admin/admin-ajax.php",{method:"POST",body:fd,credentials:"same-origin"}).then(function(r){return r.json()})}
-        /* Firebase Auth (AA_FB_* constants): Google popup + email/password on Firebase's own
-           OAuth client, with Firebase sending verification / password-reset mails itself. */
-        var fbAuth=null;
-        if(window.AaFirebaseConfig&&window.firebase){try{fbAuth=firebase.initializeApp(window.AaFirebaseConfig).auth()}catch(x){fbAuth=null}}
-        function fbHandoff(tok,extra){var fd=new FormData();fd.append("action","aa_fb_login");fd.append("nonce",card.dataset.nonce);fd.append("idtoken",tok);if(extra)Object.keys(extra).forEach(function(k){fd.append(k,extra[k])});return fetch("/wp-admin/admin-ajax.php",{method:"POST",body:fd,credentials:"same-origin"}).then(function(r){return r.json()})}
-        function fbShowVerify(em){var e2=card.querySelector("[data-aa-vemail]");if(e2&&em)e2.textContent=em;var m2=card.querySelector("[data-aa-vmail]");if(m2)m2.style.display="none";pane("verify")}
-        function fbDone(d){if(d&&d.status==="ok"){if(d.verified===false){fbShowVerify(d.email)}else{location.href=(d.redirect)||"/library/"}}else{showErr((d&&d.msg)||"Sign-in could not finish — please try again.")}}
-        function fbErr(e){var m={"auth/email-already-in-use":"An account with this email already exists — sign in instead.","auth/weak-password":"That password is too weak — use at least 8 characters.","auth/invalid-email":"That email address doesn't look right.","auth/wrong-password":"Wrong email or password — try again.","auth/invalid-credential":"Wrong email or password — try again.","auth/user-not-found":"No account with that email yet — create one below.","auth/too-many-requests":"Too many attempts — wait a minute and try again.","auth/popup-closed-by-user":"Google sign-in was cancelled.","auth/cancelled-popup-request":"Google sign-in was cancelled.","auth/popup-blocked":"Your browser blocked the Google popup — allow popups and try again.","auth/unauthorized-domain":"This domain is not authorized in the Firebase console yet (Authentication → Settings → Authorized domains).","auth/network-request-failed":"Network error — check your connection."};showErr((e&&m[e.code])||(e&&e.message)||"Something went wrong — please try again.")}
-        var gfb=card.querySelector("[data-aa-fbgoogle]");
-        if(gfb&&fbAuth){gfb.addEventListener("click",function(){hideErr();gfb.disabled=true;fbAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).then(function(res){return res.user.getIdToken().then(function(t){return fbHandoff(t,{provider:"google"})})}).then(fbDone).catch(fbErr).then(function(){gfb.disabled=false})})}
-        var lf=card.querySelector("[data-aa-login]");
-        if(lf&&fbAuth){var fp=lf.querySelector("a");if(fp){fp.addEventListener("click",function(e){e.preventDefault();var em=lf.aa_login_id.value.trim();if(!em){showErr("Type your email above, then click Forgot password.");return}fbAuth.sendPasswordResetEmail(em,{url:location.origin+"/my-account/"}).then(function(){var m="Password reset email sent to "+em+" — check your inbox (and spam).";if(window.aaToast)aaToast(m);else showErr(m)}).catch(fbErr)})}}
-        if(lf){lf.addEventListener("submit",function(e){e.preventDefault();hideErr();if(fbAuth){var em=lf.aa_login_id.value.trim(),pw=lf.aa_login_pass.value,btn=lf.querySelector(".aa-auth-btn");if(!em||!pw){showErr("Enter your email and password.");return}if(btn)btn.disabled=true;fbAuth.signInWithEmailAndPassword(em,pw).then(function(res){return res.user.getIdToken().then(function(t){return fbHandoff(t).then(function(d){if(d&&d.status==="ok"&&d.verified===false){res.user.sendEmailVerification({url:location.origin+"/my-account/"}).catch(function(){});fbShowVerify(res.user.email)}else{fbDone(d)}})})}).catch(fbErr).then(function(){if(btn)btn.disabled=false})}else{var fd=new FormData(lf);fd.append("action","aa_login_submit");post(fd).then(function(d){if(d&&d.status==="ok"){location.href=(d.redirect)||location.href}else{showErr((d&&d.msg)||"Sign-in failed — check your details.")}}).catch(function(){showErr("Network error — please try again.")})}})}
-        var rf=card.querySelector("[data-aa-register]");
-        if(rf){rf.addEventListener("submit",function(e){e.preventDefault();hideErr();if(fbAuth){var nm=rf.aa_reg_name.value.trim(),em=rf.aa_reg_email.value.trim(),pw=rf.aa_reg_pass.value,btn=rf.querySelector(".aa-auth-btn");if(!nm||!em||pw.length<8){showErr("Fill your name, a valid email and a password of at least 8 characters.");return}if(btn)btn.disabled=true;fbAuth.createUserWithEmailAndPassword(em,pw).then(function(res){return res.user.updateProfile({displayName:nm}).then(function(){return res.user.sendEmailVerification({url:location.origin+"/my-account/"})}).then(function(){return res.user.getIdToken()}).then(function(t){return fbHandoff(t,{name:nm,provider:"password"})})}).then(function(d){if(d&&d.status==="ok"){fbShowVerify(d.email||em)}else{fbDone(d)}}).catch(fbErr).then(function(){if(btn)btn.disabled=false})}else{var fd=new FormData(rf);fd.append("action","aa_register_submit");post(fd).then(function(d){if(d&&d.status==="ok"&&d.verified===false){var em=card.querySelector("[data-aa-vemail]");if(em)em.textContent=d.email||"";var mv=card.querySelector("[data-aa-vmail]");if(mv&&d.mail===false){mv.textContent="Heads up: this server cannot send email yet (SMTP not configured). The admin can verify your account from the admin panel, or set the free AA_SMTP_* constants in wp-config.";mv.style.display="block"}pane("verify")}else if(d&&d.status==="ok"){location.href=(d.redirect)||location.href}else{showErr((d&&d.msg)||"Could not create the account.")}}).catch(function(){showErr("Network error — please try again.")})}})}
-        var rs=card.querySelector("[data-aa-resend]");
-        if(rs){rs.addEventListener("click",function(){rs.disabled=true;var n=card.querySelector("[data-aa-resend-note]");if(n)n.textContent="Sending…";if(fbAuth&&fbAuth.currentUser){fbAuth.currentUser.sendEmailVerification({url:location.origin+"/my-account/"}).then(function(){if(n){n.textContent="Confirmation email sent — check your inbox (and spam).";n.style.color="#34d399"}setTimeout(function(){rs.disabled=false},4000)}).catch(function(e2){if(n){n.textContent=(e2&&e2.message)||"Could not send — try again.";n.style.color="#ff8a80"}rs.disabled=false});return}var fd=new FormData();fd.append("action","aa_resend_verify");fetch("/wp-admin/admin-ajax.php",{method:"POST",body:fd,credentials:"same-origin"}).then(function(r){return r.json()}).then(function(d){if(n){n.textContent=(d&&d.msg)||"Sent.";n.style.color=(d&&d.status==="ok")?"#34d399":"#ff8a80"}setTimeout(function(){rs.disabled=false},4000)}).catch(function(){if(n)n.textContent="Network error.";rs.disabled=false})})}
+        function ids(){try{return JSON.parse(localStorage.getItem("aa_wishlist")||"[]").map(Number)}catch(e){return[]}}
+        var grid=document.querySelector("[data-aa-wishgrid]");
+        function empty(){
+                grid.innerHTML='<div class="aa-account-empty"><span class="aa-ms">favorite</span><h3>Nothing saved yet</h3><p>Tap the heart on any book cover to keep it here for later.</p><a class="aa-btn-gold" href="/shop/">Browse the Bookshelf</a></div>';
+        }
+        function mark(){
+                var list=ids();
+                grid.querySelectorAll(".aa-wishbtn").forEach(function(b){
+                        b.classList.toggle("aa-on",list.indexOf(parseInt(b.getAttribute("data-id")||"0",10))>=0);
+                });
+        }
+        function render(){
+                var list=ids();
+                if(!list.length){empty();return}
+                var fd=new FormData();list.forEach(function(i){fd.append("ids[]",i)});
+                fetch("/wp-admin/admin-ajax.php",{method:"POST",body:fd,credentials:"same-origin"})
+                        .then(function(r){return r.json()})
+                        .then(function(d){
+                                if(d&&d.status==="ok"&&d.html){grid.innerHTML='<div class="aa-books"><ul class="aa-products aa-wish-grid">'+d.html+'</ul></div>';mark()}
+                                else{empty()}
+                        })
+                        .catch(empty);
+        }
+        document.addEventListener("aa-wishlist-change",function(){render()});
+        render();
 })();
 </script>
         <?php
         return ob_get_clean();
 }
 
-function aa_profile_dashboard_html() {
-        $uid    = get_current_user_id();
-        $user   = get_userdata( $uid );
-        $wl     = aa_get_wishlist();
-        $orders = function_exists( 'wc_get_orders' ) ? wc_get_orders( array( 'customer' => $uid, 'limit' => 5 ) ) : array();
-        global $wpdb;
-        $owned = 0;
-        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->prefix . 'woocommerce_downloadable_product_permissions' ) ) ) {
-                $owned = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(DISTINCT product_id) FROM {$wpdb->prefix}woocommerce_downloadable_product_permissions WHERE user_id = %d", $uid ) );
-        }
-        $lib_url = get_permalink( get_page_by_path( 'library' ) );
+/* ------------------------------------------------------------------------
+ * No accounts: hide the "Returning customer? Click here to login" block on
+ * checkout — a guest only leaves a name and an email.
+ * ---------------------------------------------------------------------- */
 
-        ob_start();
-        ?>
-<style>
-.aa-prof{padding:46px 0 72px}
-.aa-prof-hero{display:flex;align-items:center;gap:18px;background:var(--aa-surface);border:1px solid var(--aa-line);border-radius:16px;padding:24px 26px;margin-bottom:16px}
-.aa-prof-hero img{width:58px;height:58px;border-radius:50%;border:2px solid var(--aa-goldbg)}
-.aa-prof-hero h2{color:var(--aa-tx);font-size:21px;margin:0 0 3px}
-.aa-prof-hero p{color:var(--aa-dim);font-size:13.5px;margin:0}
-.aa-prof-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
-@media(max-width:640px){.aa-prof-stats{grid-template-columns:1fr 1fr}}
-.aa-prof-stat{background:var(--aa-low);border:1px solid var(--aa-line);border-radius:12px;padding:18px 20px}
-.aa-prof-stat strong{display:block;color:var(--aa-goldbg);font-size:24px}
-.aa-prof-stat span{color:var(--aa-dim);font-size:12.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
-.aa-prof-tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:26px}
-.aa-prof-tile{display:flex;align-items:center;gap:14px;background:var(--aa-low);border:1px solid var(--aa-line);border-radius:12px;padding:18px 20px;color:var(--aa-tx);text-decoration:none;font-weight:600;font-size:14.5px}
-.aa-prof-tile .aa-ms{color:var(--aa-goldbg);font-size:22px}
-.aa-prof-tile:hover{border-color:var(--aa-goldbg)}
-.aa-prof-orders{background:var(--aa-low);border:1px solid var(--aa-line);border-radius:12px;padding:20px}
-.aa-prof-orders h3{color:var(--aa-tx);font-size:15px;margin:0 0 12px}
-.aa-prof-orders table{width:100%;border-collapse:collapse;font-size:13.5px}
-.aa-prof-orders th{text-align:left;color:var(--aa-dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:6px 8px;border-bottom:1px solid var(--aa-line)}
-.aa-prof-orders td{padding:9px 8px;border-bottom:1px solid var(--aa-line);color:var(--aa-tx)}
-.aa-prof-logout{display:inline-flex;align-items:center;gap:8px;margin-top:18px;color:#ff8a80;font-size:13.5px;font-weight:600;text-decoration:none}
-</style>
-<section class="aa-prof"><div class="aa-wrap">
-        <?php echo function_exists( 'aa_verify_banner_html' ) ? aa_verify_banner_html() : ''; ?>
-        <div class="aa-prof-hero">
-                <?php echo get_avatar( $uid, 58 ); ?>
-                <div><h2>Hello, <?php echo esc_html( $user->display_name ? $user->display_name : $user->user_login ); ?></h2>
-                <p><?php echo esc_html( $user->user_email ); ?> &middot; member since <?php echo esc_html( mysql2date( 'M Y', $user->user_registered ) ); ?></p></div>
-        </div>
-        <div class="aa-prof-stats">
-                <div class="aa-prof-stat"><strong><?php echo esc_html( $owned ); ?></strong><span>Books owned</span></div>
-                <div class="aa-prof-stat"><strong><?php echo esc_html( count( $orders ) ); ?></strong><span>Orders</span></div>
-                <div class="aa-prof-stat"><strong><?php echo esc_html( count( $wl ) ); ?></strong><span>Wishlist</span></div>
-        </div>
-        <div class="aa-prof-tiles">
-                <a class="aa-prof-tile" href="<?php echo esc_url( $lib_url ); ?>"><span class="aa-ms">download</span><span>My Library &amp; downloads</span></a>
-                <a class="aa-prof-tile" href="<?php echo esc_url( wc_get_account_endpoint_url( 'orders' ) ); ?>"><span class="aa-ms">receipt_long</span><span>Orders</span></a>
-                <a class="aa-prof-tile" href="<?php echo esc_url( wc_get_account_endpoint_url( 'wishlist' ) ); ?>"><span class="aa-ms">favorite</span><span>Wishlist</span></a>
-                <a class="aa-prof-tile" href="<?php echo esc_url( wc_get_account_endpoint_url( 'edit-account' ) ); ?>"><span class="aa-ms">settings</span><span>Profile &amp; password</span></a>
-        </div>
-        <div class="aa-prof-orders">
-                <h3>Recent orders</h3>
-                <?php if ( $orders ) : ?><table><thead><tr><th>Order</th><th>Date</th><th>Total</th><th>Status</th></tr></thead><tbody>
-                <?php foreach ( $orders as $o ) : ?><tr>
-                        <td><a href="<?php echo esc_url( $o->get_view_order_url() ); ?>" style="color:var(--aa-goldbg);text-decoration:none">#<?php echo esc_html( $o->get_order_number() ); ?></a></td>
-                        <td><?php echo esc_html( $o->get_date_created() ? $o->get_date_created()->date_i18n( 'M j, Y' ) : '' ); ?></td>
-                        <td><?php echo wp_kses_post( $o->get_formatted_order_total() ); ?></td>
-                        <td><?php echo esc_html( ucfirst( $o->get_status() ) ); ?></td>
-                </tr><?php endforeach; ?>
-                </tbody></table>
-                <?php else : ?><p style="color:var(--aa-dim);font-size:13.5px;margin:0">No orders yet — <a href="/shop/" style="color:var(--aa-goldbg);text-decoration:none">find your first read</a>.</p><?php endif; ?>
-        </div>
-        <a class="aa-prof-logout" href="<?php echo esc_url( wp_logout_url( home_url( '/' ) ) ); ?>"><span class="aa-ms">logout</span><span>Log out</span></a>
-</div></section>
-        <?php if ( function_exists( 'aa_fb_active' ) && aa_fb_active() ) : ?>
-        <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-        <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-        <script>
-        window.AaFirebaseConfig=<?php echo wp_json_encode( aa_fb_js_config() ); ?>;
-        (function(){
-                try{var auth=firebase.initializeApp(window.AaFirebaseConfig).auth()}catch(x){return}
-                /* Sign out of Firebase too — otherwise the SDK's saved session would
-                   sign the reader straight back in after the WP logout redirect. */
-                document.addEventListener("click",function(e){
-                        var a=e.target&&e.target.closest?e.target.closest(".aa-prof-logout"):null;
-                        if(!a)return;
-                        e.preventDefault();
-                        var go=function(){location.href=a.getAttribute("href")||"/"};
-                        try{auth.signOut().then(go,go)}catch(x){go()}
-                },true);
-                <?php if ( aa_email_is_verified( $uid ) ) : ?>
-                return; // verified — nothing to sync
-                <?php endif; ?>
-                /* One-time sync: the reader just clicked the Firebase verification link and
-                   came back. Refresh the ID token so the server flips the verified flag and
-                   unlocks downloads. Only reloads when the verification actually landed. */
-                auth.onAuthStateChanged(function(fu){
-                        if(!fu||!fu.emailVerified)return;
-                        fu.getIdToken(true).then(function(t){
-                                var fd=new FormData();
-                                fd.append("action","aa_fb_login");
-                                fd.append("nonce","<?php echo esc_js( wp_create_nonce( 'aa_auth' ) ); ?>");
-                                fd.append("idtoken",t);
-                                return fetch("/wp-admin/admin-ajax.php",{method:"POST",body:fd,credentials:"same-origin"}).then(function(r){return r.json()});
-                        }).then(function(d){if(d&&d.status==="ok"&&d.verified){location.reload()}});
-                });
-        })();
-        </script>
-        <?php endif; ?>
-        <?php
-        return ob_get_clean();
-}
+add_action( 'wp_loaded', 'aa_drop_checkout_login_prompt' );
 
-/* AJAX: email/password sign-in + registration for [aa_auth]. */
-
-add_action( 'wp_ajax_aa_login_submit', 'aa_login_submit_ajax' );
-add_action( 'wp_ajax_nopriv_aa_login_submit', 'aa_login_submit_ajax' );
-
-function aa_login_submit_ajax() {
-        if ( ! check_ajax_referer( 'aa_auth', 'nonce', false ) ) {
-                wp_send_json( array( 'status' => 'error', 'msg' => 'Security check failed — reload the page and try again.' ), 403 );
-        }
-        $id  = isset( $_POST['aa_login_id'] ) ? sanitize_text_field( wp_unslash( $_POST['aa_login_id'] ) ) : '';
-        $pw  = isset( $_POST['aa_login_pass'] ) ? (string) wp_unslash( $_POST['aa_login_pass'] ) : '';
-        if ( '' === $id || '' === $pw ) {
-                wp_send_json( array( 'status' => 'error', 'msg' => 'Enter your email and password.' ), 400 );
-        }
-        if ( is_email( $id ) ) {
-                $u = get_user_by( 'email', $id );
-                if ( $u ) { $id = $u->user_login; }
-        }
-        $creds = array( 'user_login' => $id, 'user_password' => $pw, 'remember' => ! empty( $_POST['aa_remember'] ) );
-        $user  = wp_signon( $creds, true );
-        if ( is_wp_error( $user ) ) {
-                wp_send_json( array( 'status' => 'error', 'msg' => 'Wrong email or password — try again.' ), 401 );
-        }
-        wp_send_json( array( 'status' => 'ok', 'redirect' => home_url( '/library/' ) ) );
-}
-
-add_action( 'wp_ajax_aa_register_submit', 'aa_register_submit_ajax' );
-add_action( 'wp_ajax_nopriv_aa_register_submit', 'aa_register_submit_ajax' );
-
-function aa_register_submit_ajax() {
-        if ( ! check_ajax_referer( 'aa_auth', 'nonce', false ) ) {
-                wp_send_json( array( 'status' => 'error', 'msg' => 'Security check failed — reload the page and try again.' ), 403 );
-        }
-        $name  = isset( $_POST['aa_reg_name'] ) ? sanitize_text_field( wp_unslash( $_POST['aa_reg_name'] ) ) : '';
-        $email = isset( $_POST['aa_reg_email'] ) ? sanitize_email( wp_unslash( $_POST['aa_reg_email'] ) ) : '';
-        $pw    = isset( $_POST['aa_reg_pass'] ) ? (string) wp_unslash( $_POST['aa_reg_pass'] ) : '';
-        if ( '' === $name || ! is_email( $email ) || strlen( $pw ) < 8 ) {
-                wp_send_json( array( 'status' => 'error', 'msg' => 'Fill your name, a valid email and a password of at least 8 characters.' ), 400 );
-        }
-        if ( email_exists( $email ) ) {
-                wp_send_json( array( 'status' => 'error', 'msg' => 'An account with this email already exists — sign in instead.' ), 409 );
-        }
-        $base = sanitize_user( strtolower( current( explode( '@', $email ) ) ), true );
-        if ( '' === $base || ! validate_username( $base ) ) { $base = 'reader'; }
-        $username = $base; $i = 1;
-        while ( username_exists( $username ) ) { $i++; $username = $base . $i; }
-        $uid = wp_create_user( $username, $pw, $email );
-        if ( is_wp_error( $uid ) ) {
-                wp_send_json( array( 'status' => 'error', 'msg' => 'Could not create the account — try a different email.' ), 500 );
-        }
-        wp_update_user( array( 'ID' => $uid, 'display_name' => $name ) );
-        // Confirmation email first — the account can browse immediately, but
-        // downloads stay locked until the address is verified.
-        $mail_ok = function_exists( 'aa_email_send_verification' ) ? aa_email_send_verification( $uid ) : false;
-        update_user_meta( $uid, '_aa_email_verified', '0' );
-        wp_signon( array( 'user_login' => $username, 'user_password' => $pw, 'remember' => true ), true );
-        wp_send_json( array( 'status' => 'ok', 'verified' => false, 'mail' => (bool) $mail_ok, 'email' => $email, 'redirect' => home_url( '/library/' ) ) );
+function aa_drop_checkout_login_prompt() {
+        remove_action( 'woocommerce_before_checkout_form', 'woocommerce_checkout_login_form', 10 );
 }
 
 add_shortcode( 'aa_product_single', 'aa_product_single_shortcode' );
@@ -1016,7 +692,6 @@ function aa_product_single_shortcode() {
                 $dl         = reset( $downloads );
                 $sample_url = $dl->get_file();
         }
-        $in_wish = in_array( $pid, aa_get_wishlist(), true );
 
         $stars = '';
         for ( $i = 0; $i < 5; $i++ ) { $stars .= '<span class="aa-ms aa-star">star</span>'; }
@@ -1081,12 +756,12 @@ function aa_product_single_shortcode() {
                                 <div class="aa-pdp-cta">
                                         <a class="aa-btn-gold <?php echo esc_attr( $cart_cls ); ?>" data-product_id="<?php echo esc_attr( $pid ); ?>" data-quantity="1" href="<?php echo esc_url( $add_url ); ?>"><span class="aa-ms">shopping_cart</span><span>Add to cart</span></a>
                                         <?php if ( $sample_url ) : ?><a class="aa-btn-ghost" href="<?php echo esc_url( $sample_url ); ?>" target="_blank" rel="noopener"><span class="aa-ms">menu_book</span><span>Read sample</span></a><?php endif; ?>
-                                        <button type="button" class="aa-wishbtn aa-wishbtn-lg<?php echo $in_wish ? ' aa-on' : ''; ?>" data-id="<?php echo esc_attr( $pid ); ?>" aria-label="Save to wishlist"><span class="aa-ms">favorite</span></button>
+                                        <button type="button" class="aa-wishbtn aa-wishbtn-lg" data-id="<?php echo esc_attr( $pid ); ?>" aria-label="Save to wishlist"><span class="aa-ms">favorite</span></button>
                                 </div>
                                 <ul class="aa-pdp-trust">
-                                        <li><span class="aa-ms">bolt</span>Instant PDF download after checkout</li>
+                                        <li><span class="aa-ms">bolt</span>PDF lands in your email right after checkout</li>
                                         <li><span class="aa-ms">devices</span>Reads beautifully on phone, tablet &amp; Kindle</li>
-                                        <li><span class="aa-ms">update</span>Yours forever &mdash; 5 full downloads per purchase</li>
+                                        <li><span class="aa-ms">update</span>Yours forever &mdash; unlimited downloads, no account needed</li>
                                 </ul>
                         </div>
                 </div>
@@ -1103,7 +778,7 @@ function aa_product_single_shortcode() {
                                 <?php if ( $pages ) : ?><li><span>Pages</span><strong><?php echo esc_html( $pages ); ?></strong></li><?php endif; ?>
                                 <li><span>Language</span><strong><?php echo esc_html( $lang ); ?></strong></li>
                                 <?php if ( $cat ) : ?><li><span>Category</span><strong><?php echo esc_html( $cat ); ?></strong></li><?php endif; ?>
-                                <li><span>Delivery</span><strong>Instant download</strong></li>
+                                <li><span>Delivery</span><strong>Instant PDF by email</strong></li>
                                 <li><span>Publisher</span><strong>Annaadhya Ebooks</strong></li>
                         </ul>
                 </aside>
@@ -1126,184 +801,27 @@ function aa_product_single_shortcode() {
 }
 
 /* ------------------------------------------------------------------------
- * [aa_library] — customer's purchased ebooks + purchase history.
+ * [aa_library] — legacy "My Library" page. There are no accounts any more:
+ * books are delivered straight to the buyer's email after payment, so the
+ * page now simply explains the flow.
  * ---------------------------------------------------------------------- */
 
 add_shortcode( 'aa_library', 'aa_library_shortcode' );
 
 function aa_library_shortcode() {
-        if ( ! is_user_logged_in() ) {
-                ob_start();
-                ?>
+        $shop = get_permalink( wc_get_page_id( 'shop' ) );
+        ob_start();
+        ?>
 <section class="aa-lib">
         <div class="aa-wrap">
                 <div class="aa-lib-gate">
-                        <span class="aa-ms">lock</span>
-                        <h2>Your library awaits</h2>
-                        <p>Sign in with the account you used at checkout to read, download and re-download every ebook you own — anytime, on any device.</p>
+                        <span class="aa-ms">mark_email_read</span>
+                        <h2>Your books arrive by email</h2>
+                        <p>Annaadhya is fully account-free: buy any ebook as a guest, and seconds after payment the PDF files are attached to a delivery email sent to the address you used at checkout. The email is your receipt too &mdash; keep it, and re-download from its links whenever you like.</p>
                         <div class="aa-lib-gate-btns">
-                                <a class="aa-btn-gold" href="<?php echo esc_url( get_permalink( wc_get_page_id( 'myaccount' ) ) ); ?>"><span class="aa-ms">login</span><span>Sign in</span></a>
-                                <a class="aa-btn-ghost" href="/shop/"><span>Browse the Bookshelf</span></a>
+                                <a class="aa-btn-gold" href="<?php echo esc_url( $shop ); ?>"><span class="aa-ms">storefront</span><span>Browse the Bookshelf</span></a>
                         </div>
                 </div>
-        </div>
-</section>
-                <?php
-                return ob_get_clean();
-        }
-
-        $uid       = get_current_user_id();
-        $downloads = function_exists( 'wc_get_customer_available_downloads' ) ? wc_get_customer_available_downloads( $uid ) : array();
-        $orders    = function_exists( 'wc_get_orders' ) ? wc_get_orders( array( 'customer' => $uid, 'limit' => 24 ) ) : array();
-
-        // Raw permissions table: usage counters + exhausted grants (not in the
-        // "available" list) so the library can show re-buy states.
-        global $wpdb;
-        $perm = array();
-        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->prefix . 'woocommerce_downloadable_product_permissions' ) ) ) {
-                $rows = $wpdb->get_results( $wpdb->prepare( "SELECT download_id, product_id, order_id, download_count, downloads_remaining, access_granted FROM {$wpdb->prefix}woocommerce_downloadable_product_permissions WHERE user_id = %d ORDER BY order_id DESC", $uid ) );
-                foreach ( (array) $rows as $r ) { $perm[ $r->download_id ] = $r; }
-        }
-        $active_ids    = array();
-        $exhausted_ids = array();
-        foreach ( $downloads as $dl ) { $active_ids[] = $dl['download_id']; }
-        foreach ( $perm as $pid => $r ) {
-                if ( in_array( $pid, $active_ids, true ) ) { continue; }
-                if ( '' !== $r->downloads_remaining && (int) $r->downloads_remaining < 1 && ! in_array( $r->product_id, $exhausted_ids, true ) ) {
-                        $exhausted_ids[] = $r->product_id;
-                }
-        }
-        $exhausted = array();
-        foreach ( $exhausted_ids as $epid ) {
-                $p = wc_get_product( $epid );
-                if ( $p ) { $exhausted[] = $p; }
-        }
-
-        ob_start();
-        ?>
-<style>
-.aa-dl-banner{display:flex;gap:14px;align-items:flex-start;background:linear-gradient(90deg,rgba(245,158,11,.12),rgba(245,158,11,.03));border:1px solid rgba(245,158,11,.4);border-radius:14px;padding:18px 22px;margin:0 0 26px}
-.aa-dl-banner .aa-ms{color:var(--aa-goldbg);font-size:24px;margin-top:2px}
-.aa-dl-banner strong{display:block;color:var(--aa-tx);font-size:15px;margin-bottom:4px}
-.aa-dl-banner p{color:var(--aa-warm);font-size:13.5px;line-height:1.65;margin:0}
-.aa-lib-card{background:var(--aa-low);border:1px solid var(--aa-line);border-radius:14px;padding:18px;display:flex;gap:16px}
-.aa-lib-card img{width:84px;height:112px;object-fit:cover;border-radius:8px;flex-shrink:0}
-.aa-lib-card-mid{flex:1;min-width:0}
-.aa-lib-card-mid h3{color:var(--aa-tx);font-size:15.5px;font-weight:700;margin:0 0 3px}
-.aa-lib-card-mid .aa-lib-sub{color:var(--aa-dim);font-size:12.5px;margin:0 0 12px}
-.aa-dl-meter{margin-bottom:10px}
-.aa-dl-meter-top{display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:6px}
-.aa-dl-meter-top span:first-child{color:var(--aa-warm);font-weight:600}
-.aa-dl-chip{background:var(--aa-cont);border:1px solid var(--aa-line);color:var(--aa-goldbg);border-radius:999px;padding:2px 10px;font-weight:700;font-size:11px;white-space:nowrap}
-.aa-dl-chip.aa-out{color:#ff8a80;border-color:rgba(255,138,128,.4)}
-.aa-dl-bar{height:6px;background:var(--aa-cont);border-radius:999px;overflow:hidden}
-.aa-dl-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--aa-goldbg),var(--aa-gold));border-radius:999px}
-.aa-dl-bar i.aa-full{background:linear-gradient(90deg,#b3543f,#ff8a80)}
-.aa-lib-card-act{display:flex;flex-direction:column;justify-content:center;gap:8px;flex-shrink:0}
-.aa-lib-out{color:#ff8a80;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px}
-.aa-lib-btn{display:inline-flex;align-items:center;gap:8px;background:var(--aa-goldbg);color:var(--aa-ongold);font:700 13px/1 inherit;font-family:inherit;border:0;border-radius:10px;padding:12px 18px;text-decoration:none!important;white-space:nowrap}
-.aa-lib-btn:hover{background:var(--aa-gold)}
-.aa-lib-btn.aa-ghost{background:transparent;border:1px solid var(--aa-goldbg);color:var(--aa-goldbg)}
-.aa-lib-btn.aa-ghost:hover{background:rgba(245,158,11,.1)}
-@media(max-width:640px){.aa-lib-card{flex-wrap:wrap}.aa-lib-card-act{width:100%;flex-direction:row;align-items:center;justify-content:space-between}}
-</style>
-<section class="aa-lib">
-        <div class="aa-wrap">
-                <?php echo function_exists( 'aa_verify_banner_html' ) ? aa_verify_banner_html() : ''; ?>
-                <div class="aa-dl-banner">
-                        <span class="aa-ms">cloud_download</span>
-                        <div>
-                                <strong>Every purchase includes 5 full PDF downloads</strong>
-                                <p>Used all 5? Buy again to restore access &mdash; your books never expire, only the download counter does. Open on any device, keep forever.</p>
-                        </div>
-                </div>
-                <?php if ( $downloads || $exhausted ) : ?>
-                <div class="aa-lib-grid" style="grid-template-columns:1fr;gap:14px">
-                        <?php foreach ( $downloads as $dl ) :
-                                $r       = isset( $perm[ $dl['download_id'] ] ) ? $perm[ $dl['download_id'] ] : null;
-                                $product = wc_get_product( $dl['product_id'] );
-                                $cover   = $product ? ( get_the_post_thumbnail_url( $dl['product_id'], 'medium' ) ?: wc_placeholder_img_src() ) : wc_placeholder_img_src();
-                                $limit   = $product ? (int) $product->get_download_limit() : 5;
-                                $rem     = $dl['downloads_remaining'];
-                                $unlim   = ( '' === $rem || $limit < 1 );
-                                $remn    = $unlim ? 0 : (int) $rem;
-                                $used    = $unlim ? ( $r ? (int) $r->download_count : 0 ) : max( 0, $limit - $remn );
-                                $pct     = $unlim ? 0 : ( $limit ? min( 100, round( $used / $limit * 100 ) ) : 0 );
-                                $author  = $product ? (string) get_post_meta( $dl['product_id'], '_aa_author', true ) : '';
-                                $granted = $r && $r->access_granted ? mysql2date( 'M j, Y', $r->access_granted ) : '';
-                                ?>
-                        <div class="aa-lib-card">
-                                <img src="<?php echo esc_url( $cover ); ?>" alt="<?php echo esc_attr( $dl['product_name'] ); ?> cover">
-                                <div class="aa-lib-card-mid">
-                                        <h3><?php echo esc_html( $dl['product_name'] ); ?></h3>
-                                        <p class="aa-lib-sub"><?php echo $author ? esc_html( $author ) . ' &middot; ' : ''; ?><?php echo $granted ? 'Delivered ' . esc_html( $granted ) : 'PDF'; ?> &middot; yours forever</p>
-                                        <div class="aa-dl-meter">
-                                                <div class="aa-dl-meter-top">
-                                                        <span><?php echo $unlim ? 'Unlimited re-downloads' : esc_html( $used ) . ' of ' . esc_html( $limit ) . ' downloads used'; ?></span>
-                                                        <span class="aa-dl-chip"><?php echo $unlim ? '∞' : esc_html( $remn ) . ' left'; ?></span>
-                                                </div>
-                                                <?php if ( ! $unlim ) : ?><div class="aa-dl-bar"><i style="width:<?php echo esc_attr( $pct ); ?>%"></i></div><?php endif; ?>
-                                        </div>
-                                </div>
-                                <div class="aa-lib-card-act">
-                                        <a class="aa-lib-btn" href="<?php echo esc_url( $dl['download_url'] ); ?>"><span class="aa-ms">download</span><span>Download PDF</span></a>
-                                </div>
-                        </div>
-                        <?php endforeach; ?>
-                        <?php foreach ( $exhausted as $p ) :
-                                $cover = get_the_post_thumbnail_url( $p->get_id(), 'medium' ) ?: wc_placeholder_img_src();
-                                $price = wp_kses_post( wc_price( (float) $p->get_price( 'edit' ) ) );
-                                ?>
-                        <div class="aa-lib-card" style="border-color:rgba(255,138,128,.35)">
-                                <img src="<?php echo esc_url( $cover ); ?>" alt="<?php echo esc_attr( $p->get_name() ); ?> cover">
-                                <div class="aa-lib-card-mid">
-                                        <h3><?php echo esc_html( $p->get_name() ); ?></h3>
-                                        <p class="aa-lib-sub"><?php echo esc_html( (string) get_post_meta( $p->get_id(), '_aa_author', true ) ); ?> &middot; PDF &middot; yours forever</p>
-                                        <div class="aa-dl-meter">
-                                                <div class="aa-dl-meter-top">
-                                                        <span>5 of 5 downloads used</span>
-                                                        <span class="aa-dl-chip aa-out">0 left</span>
-                                                </div>
-                                                <div class="aa-dl-bar"><i class="aa-full" style="width:100%"></i></div>
-                                        </div>
-                                </div>
-                                <div class="aa-lib-card-act">
-                                        <span class="aa-lib-out"><span class="aa-ms">block</span>Downloads used up</span>
-                                        <a class="aa-lib-btn aa-ghost" href="<?php echo esc_url( add_query_arg( 'add-to-cart', $p->get_id(), get_permalink( $p->get_id() ) ) ); ?>"><span class="aa-ms">shopping_cart</span><span>Buy again &middot; <?php echo $price; ?></span></a>
-                                </div>
-                        </div>
-                        <?php endforeach; ?>
-                </div>
-                <?php else : ?>
-                <div class="aa-lib-gate aa-lib-gate-lite">
-                        <span class="aa-ms">auto_stories</span>
-                        <h2>No books yet</h2>
-                        <p>Every ebook you purchase lands here as an instant, re-downloadable PDF — with 5 full downloads included.</p>
-                        <a class="aa-btn-gold" href="/shop/"><span>Find your first read</span><span class="aa-ms">arrow_forward</span></a>
-                </div>
-                <?php endif; ?>
-
-                <h2 class="aa-lib-h2">Purchase history</h2>
-                <?php if ( $orders ) : ?>
-                <div class="aa-lib-tablewrap">
-                <table class="aa-lib-table">
-                        <thead><tr><th>Order</th><th>Date</th><th>Items</th><th>Total</th><th>Status</th></tr></thead>
-                        <tbody>
-                        <?php foreach ( $orders as $order ) : ?>
-                        <tr>
-                                <td><a href="<?php echo esc_url( $order->get_view_order_url() ); ?>">#<?php echo esc_html( $order->get_order_number() ); ?></a></td>
-                                <td><?php echo esc_html( $order->get_date_created() ? $order->get_date_created()->date_i18n( 'M j, Y' ) : '' ); ?></td>
-                                <td><?php echo esc_html( count( $order->get_items() ) ); ?> item<?php echo count( $order->get_items() ) === 1 ? '' : 's'; ?></td>
-                                <td><?php echo wp_kses_post( $order->get_formatted_order_total() ); ?></td>
-                                <td><span class="aa-status aa-status-<?php echo esc_attr( $order->get_status() ); ?>"><?php echo esc_html( ucfirst( $order->get_status() ) ); ?></span></td>
-                        </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                </table>
-                </div>
-                <?php else : ?>
-                <p class="aa-lib-none">No orders yet — your purchase history will appear here after checkout.</p>
-                <?php endif; ?>
         </div>
 </section>
         <?php
@@ -1320,8 +838,7 @@ add_filter( 'gettext', 'aa_download_limit_message', 10, 3 );
 
 function aa_download_limit_message( $translation, $text, $domain ) {
         if ( 'woocommerce' === $domain && 'Sorry, you have reached your download limit for this file' === $text ) {
-                $lib = get_permalink( get_page_by_path( 'library' ) );
-                return 'You have used all 5 downloads for this book. Buy it again to restore access — the book itself never expires.' . ( $lib ? ' <a href="' . esc_url( $lib ) . '">Open My Library</a>' : '' );
+                return 'This download link has stopped working. Open your delivery email and download the PDF again — the links there never expire.';
         }
         return $translation;
 }

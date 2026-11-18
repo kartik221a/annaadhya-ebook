@@ -44,7 +44,7 @@ function aa_admin_layout( $title, $body, $active = 'dashboard' ) {
                 'products'   => array( aa_admin_url( 'products' ), 'Books', 'book' ),
                 'categories' => array( aa_admin_url( 'categories' ), 'Categories', 'tag' ),
                 'orders'     => array( aa_admin_url( 'orders' ), 'Orders', 'bag' ),
-                'downloads'  => array( aa_admin_url( 'downloads' ), 'Downloads', 'download' ),
+                'downloads'  => array( aa_admin_url( 'downloads' ), 'Email Delivery', 'download' ),
                 'messages'   => array( aa_admin_url( 'messages' ), 'Messages', 'mail' ),
                 'subscribers' => array( aa_admin_url( 'subscribers' ), 'Subscribers', 'users' ),
         );

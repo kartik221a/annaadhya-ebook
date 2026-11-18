@@ -428,7 +428,7 @@ $aa_contact_faq = <<<'HTML'
     <h2>Frequently asked questions</h2>
     <details open>
       <summary>I paid but did not get my download. What now?<span class="aa-ms">add</span></summary>
-      <p>Open <a href="/library/" style="color:var(--aa-gold)">My Library</a> and sign in with the email you used at checkout &mdash; your ebooks appear there within seconds of payment. Still nothing? Send us a message with your order number and we will fix it the same day.</p>
+      <p>Seconds after payment the PDF is attached to a delivery email sent to the address you used at checkout &mdash; check spam first, then send us a message with your order number and we will re-send it the same day.</p>
     </details>
     <details>
       <summary>Can I read my ebook on Kindle or an iPad?<span class="aa-ms">add</span></summary>
@@ -436,7 +436,7 @@ $aa_contact_faq = <<<'HTML'
     </details>
     <details>
       <summary>My download link stopped working. Can I get another one?<span class="aa-ms">add</span></summary>
-      <p>Of course. Downloads never expire from My Library, and the account page can issue fresh links any time. See our <a href="/digital-delivery-policy/" style="color:var(--aa-gold)">Digital Delivery Policy</a> for the details.</p>
+      <p>Of course. The links in your delivery email never expire and there is no download limit &mdash; open the order page from your confirmation email and download again any time. See our <a href="/digital-delivery-policy/" style="color:var(--aa-gold)">Digital Delivery Policy</a> for the details.</p>
     </details>
     <details>
       <summary>What is your refund policy?<span class="aa-ms">add</span></summary>

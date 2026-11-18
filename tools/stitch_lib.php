@@ -191,9 +191,6 @@ function aa_nav_html( $active = '' ) {
         <span class="aa-ms">search</span>
         <input type="search" name="book" placeholder="Quick search books..." aria-label="Search books">
       </form>
-      <a class="aa-actbtn" href="/my-account/" aria-label="My Account">
-        <span class="aa-ms">person</span>
-      </a>
       <a class="aa-cartbtn" href="/cart/" aria-label="Cart">
         <span class="aa-ms">shopping_bag</span>
         <span class="aa-cartcount" data-aa-cartcount hidden>0</span>
@@ -207,8 +204,6 @@ function aa_nav_html( $active = '' ) {
     <a href="/shop/">Shop</a>
     <a href="/about/">About</a>
     <a href="/contact/">Contact</a>
-    <a href="/library/">My Library</a>
-    <a href="/my-account/">My Account</a>
     <a href="/cart/">Cart</a>
   </div>
 </header>
@@ -216,8 +211,8 @@ function aa_nav_html( $active = '' ) {
   <a href="/" class="' . $cls( 'home' ) . '"><span class="aa-ms">home</span><span>Home</span></a>
   <a href="/shop/" class="' . $cls( 'shop' ) . '"><span class="aa-ms">storefront</span><span>Shop</span></a>
   <button type="button" data-aa-search aria-label="Search"><span class="aa-ms">search</span><span>Search</span></button>
-  <a href="/library/" class="' . $cls( 'library' ) . '"><span class="aa-ms">auto_stories</span><span>Library</span></a>
-  <a href="/my-account/" class="' . $cls( 'account' ) . '"><span class="aa-ms">person</span><span>Account</span></a>
+  <a href="/my-account/" class="' . $cls( 'account' ) . '"><span class="aa-ms">favorite</span><span>Wishlist</span></a>
+  <a href="/cart/" class="' . $cls( 'cart' ) . '"><span class="aa-ms">shopping_bag</span><span>Cart</span></a>
 </nav>
 <div class="aa-searchsheet" id="aa-searchsheet" hidden>
   <form class="aa-ss-in" action="/shop/" method="get">
@@ -286,11 +281,11 @@ function aa_footer_html() {
         </ul>
       </div>
       <div>
-        <h4>Account</h4>
+        <h4>Help</h4>
         <ul>
-          <li><a href="/library/">My Library</a></li>
-          <li><a href="/my-account/">My Account</a></li>
-          <li><a href="/my-account/wishlist/">Wishlist</a></li>
+          <li><a href="/contact/">Contact Support</a></li>
+          <li><a href="/about/">About Us</a></li>
+          <li><a href="/my-account/">Wishlist</a></li>
           <li><a href="/cart/">Shopping Cart</a></li>
           <li><a href="/web-admin/">Site Admin</a></li>
         </ul>
@@ -417,14 +412,21 @@ function aa_footer_html() {
   document.addEventListener("click",function(e){
     var b=e.target.closest?e.target.closest(".aa-wishbtn"):null;if(!b)return;
     e.preventDefault();e.stopPropagation();
-    var fd=new FormData();fd.append("action","aa_wishlist_toggle");fd.append("id",b.getAttribute("data-id")||"");
-    fetch("/wp-admin/admin-ajax.php",{method:"POST",body:fd,credentials:"same-origin"})
-      .then(function(r){return r.json()})
-      .then(function(d){
-        if(d&&d.status==="login"){location.href="/my-account/?aa_wish=login";return}
-        if(d&&d.status==="ok"){b.classList.toggle("aa-on",d.on);toast(d.on?"Saved to your wishlist":"Removed from wishlist")}
-      }).catch(function(){});
+    var id=parseInt(b.getAttribute("data-id")||"0",10);if(!id)return;
+    var wl=[];try{wl=JSON.parse(localStorage.getItem("aa_wishlist")||"[]")}catch(err){wl=[]}
+    var i=wl.indexOf(id);var on=false;
+    if(i>=0){wl.splice(i,1)}else{wl.push(id);on=true}
+    try{localStorage.setItem("aa_wishlist",JSON.stringify(wl))}catch(err){}
+    b.classList.toggle("aa-on",on);
+    if(window.aaToast)toast(on?"Saved to your wishlist":"Removed from wishlist");
+    document.dispatchEvent(new CustomEvent("aa-wishlist-change"));
   },true);
+  try{
+    var wl0=JSON.parse(localStorage.getItem("aa_wishlist")||"[]");
+    document.querySelectorAll(".aa-wishbtn").forEach(function(b){
+      if(wl0.indexOf(parseInt(b.getAttribute("data-id")||"0",10))>=0)b.classList.add("aa-on");
+    });
+  }catch(err){}
 })();
   </script>
 </footer>';

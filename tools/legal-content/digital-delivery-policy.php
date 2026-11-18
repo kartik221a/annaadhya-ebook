@@ -6,22 +6,22 @@ return <<<'HTML'
 <div class="aa-tldr">
         <h3><span class="aa-ms">bolt</span>The short version</h3>
         <ul>
-                <li><span class="aa-ms">check</span>Your download is ready <strong>seconds after payment</strong> &mdash; in My Library and by email.</li>
-                <li><span class="aa-ms">check</span>Every purchase includes <strong>5 full PDF downloads</strong>; the book stays in your account forever.</li>
+                <li><span class="aa-ms">check</span>Your download is ready <strong>seconds after payment</strong> &mdash; delivered by email, PDF attached.</li>
+                <li><span class="aa-ms">check</span>Every purchase includes the <strong>PDF by email</strong> &mdash; no download limit, no account needed.</li>
                 <li><span class="aa-ms">check</span>Format: standard PDF, tested on phones, tablets, Kindle and desktops.</li>
                 <li><span class="aa-ms">check</span>Delivery trouble? One message gets it fixed within 24 hours.</li>
         </ul>
 </div>
 <div class="aa-prose">
         <h2>1. How delivery works</h2>
-        <p>The moment your payment is confirmed, two things happen: your ebook is added to <strong><a href="/library/">My Library</a></strong> under your account, and an order email with your download link is sent to the address you used at checkout. There is nothing to wait for &mdash; no shipping, no dispatch date.</p>
+        <p>The moment your payment is confirmed, two things happen: the PDF is attached to a delivery email sent to the address you used at checkout, and the order is logged with permanent download links. There is nothing to wait for &mdash; no shipping, no dispatch date.</p>
 
         <h2>2. Delivery timing</h2>
         <p>Delivery is <strong>instant</strong> (typically under 10 seconds). In rare gateway-confirmation delays your download may take up to 15 minutes to appear; it always appears once payment confirmation reaches us. If it has been longer than 15 minutes, see section 6.</p>
 
-        <h2>3. Download limits &mdash; the 5-download rule</h2>
-        <p>Each purchase of an ebook includes <strong>5 full downloads</strong> of that title&rsquo;s PDF. Every completed download counts once, so you can keep a copy on your phone, tablet and desktop with plenty of headroom for re-downloads. A live counter (&ldquo;3 of 5 downloads used&rdquo;) is always visible next to each book in <a href="/library/">My Library</a>.</p>
-        <p><strong>Used all 5?</strong> The book is not gone: it stays in your account, but new downloads stop until access is restored. Buy the title again (one click on the &ldquo;Buy again&rdquo; button in My Library) and a fresh set of 5 downloads is granted instantly &mdash; at the current listed price. We do not re-issue free downloads once a counter is exhausted, because each download is a full copy of the file.</p>
+        <h2>3. Downloads &mdash; no limits</h2>
+        <p>Each purchase of an ebook includes the PDF of that title, delivered as an attachment to a branded email. The email stays in your inbox forever, so you can keep a copy on your phone, tablet and desktop and re-download from it any time. Permanent download links for your order are also available on the order page linked from your confirmation email.</p>
+        <p><strong>Lost the email?</strong> The book is not gone: every order keeps permanent download links on its order page, and support can re-send the delivery email any time &mdash; just ask via the contact form with your order number. We never cap the number of downloads.</p>
 
         <h2>4. Devices and formats</h2>
         <ul>
@@ -32,7 +32,7 @@ return <<<'HTML'
         </ul>
 
         <h2>5. What you need</h2>
-        <p>An internet connection to download, a PDF reader to read, and the email address you paid with to access My Library. That&rsquo;s the entire technical requirement list.</p>
+        <p>An internet connection to download, a PDF reader to read, and an email address to receive your books. That&rsquo;s the entire technical requirement list.</p>
 
         <h2>6. If delivery fails</h2>
         <ul>
