@@ -19,6 +19,14 @@ add_action( 'woocommerce_payment_complete', 'aa_book_delivery_send', 20 );
 add_action( 'woocommerce_order_status_completed', 'aa_book_delivery_send', 20 );
 add_action( 'woocommerce_order_status_processing', 'aa_book_delivery_send', 20 );
 
+/* WooCommerce's own customer order mails (processing / completed / on-hold)
+ * carry download links that assume an account — this store has none, and the
+ * branded delivery email below replaces them. Admin "new order" stays on. */
+add_filter( 'woocommerce_email_enabled_customer_processing_order', '__return_false' );
+add_filter( 'woocommerce_email_enabled_customer_completed_order', '__return_false' );
+add_filter( 'woocommerce_email_enabled_customer_on_hold_order', '__return_false' );
+add_filter( 'woocommerce_email_enabled_customer_new_account', '__return_false' );
+
 /** Send the book email once per order. */
 function aa_book_delivery_send( $order_id ) {
         $order = wc_get_order( $order_id );
@@ -67,11 +75,19 @@ function aa_book_delivery_send( $order_id ) {
         $subject = sprintf( 'Your Annaadhya ebooks are here — order #%s (PDFs attached)', $order->get_order_number() );
 
         $headers = array( 'Content-Type: text/html; charset=UTF-8' );
+        if ( function_exists( 'aa_smtp_configured' ) && aa_smtp_configured() ) {
+                $from_name = defined( 'AA_SMTP_FROM_NAME' ) && AA_SMTP_FROM_NAME ? AA_SMTP_FROM_NAME : 'Annaadhya Ebooks';
+                $from_addr = defined( 'AA_SMTP_FROM' ) && AA_SMTP_FROM ? AA_SMTP_FROM : AA_SMTP_USER;
+                $headers[] = 'From: ' . $from_name . ' <' . $from_addr . '>';
+        }
         $sent    = wp_mail( $email, $subject, $body, $headers, $files );
 
         $order->update_meta_data( '_aa_books_emailed', $sent ? time() : 0 );
         if ( ! $sent ) {
                 $order->update_meta_data( '_aa_books_email_error', 'wp_mail returned false — check SMTP/mail logs on the host' );
+                $order->add_order_note( 'Could not email the book PDFs to ' . $email . ' — delivery retries on the next status change.' );
+        } else {
+                $order->add_order_note( 'Ebook PDF delivered to ' . $email . ' by email (attachment' . ( count( $files ) > 1 ? 's: ' . count( $files ) . ' files' : ': ' . ( isset( $files[0] ) ? basename( $files[0] ) : 'none — link fallback' ) ) . '). No account needed.' );
         }
         $order->save();
 }
