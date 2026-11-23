@@ -43,8 +43,7 @@ function aa_admin_hero_row( $product, $current_pid ) {
         $pid   = $product->get_id();
         $name  = $product->get_name();
 
-        $cover = get_the_post_thumbnail_url( $pid, 'medium' );
-        if ( ! $cover ) { $cover = wc_placeholder_img_src(); }
+        $cover = aa_cover_url( $pid, 'medium' );
 
         $author = (string) get_post_meta( $pid, '_aa_author', true );
         $price  = aa_admin_hero_price( $product );
@@ -77,8 +76,7 @@ function aa_admin_hero_page() {
         // Preview defaults to the book that is live right now (JS updates it live).
         $p_pid   = $current ? $current->get_id() : 0;
         $p_name  = $current ? $current->get_name() : '';
-        $p_cover = $p_pid ? get_the_post_thumbnail_url( $p_pid, 'medium' ) : '';
-        if ( $p_pid && ! $p_cover ) { $p_cover = wc_placeholder_img_src(); }
+        $p_cover = $p_pid ? aa_cover_url( $p_pid, 'medium' ) : '';
         $p_price = $current ? aa_admin_hero_price( $current ) : array( 'text' => '', 'html' => '' );
         $p_price = $p_price['html'];
         $p_link  = $p_pid ? get_permalink( $p_pid ) : '';

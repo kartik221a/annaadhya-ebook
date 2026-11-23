@@ -20,6 +20,20 @@ function aa_admin_dashboard() {
 
         $sym = get_woocommerce_currency_symbol();
 
+        // Files that the database still references but the server has lost
+        // (cover PNGs / PDFs wiped by a file restore or hosting cleanup).
+        // Surfaced loudly so broken covers can never go unnoticed again.
+        $broken = array();
+        foreach ( $books as $b ) {
+                $issues = array();
+                if ( aa_cover_file_missing( $b->get_id() ) ) { $issues[] = 'cover image'; }
+                foreach ( $b->get_downloads() as $dl ) {
+                        $p = aa_admin_download_path( $dl->get_file() );
+                        if ( $p && ! file_exists( $p ) ) { $issues[] = 'PDF file'; break; }
+                }
+                if ( $issues ) { $broken[] = array( 'book' => $b, 'issues' => $issues ); }
+        }
+
         $msg_posts = get_posts( array( 'post_type' => 'aa_message', 'posts_per_page' => 30, 'post_status' => 'publish', 'orderby' => 'date', 'order' => 'DESC' ) );
         $unread_n  = 0;
         foreach ( $msg_posts as $mp ) {
@@ -44,6 +58,25 @@ function aa_admin_dashboard() {
                 <div class="card stat"><b><?php echo (int) $subs_n; ?></b><span>Newsletter subscribers</span></div>
                 <div class="card stat"><b><?php echo (int) $dl_grants; ?></b><span>Download grants</span></div>
         </div>
+
+        <?php if ( $broken ) : ?>
+        <div class="card aa-fix-card">
+                <h2>Files need attention</h2>
+                <p class="muted small">These books still have a database record for the file below, but the file itself is missing on the server. Open the book and re-upload it — covers are repaired in place, so the homepage hero and existing links keep working.</p>
+                <table class="tbl">
+                        <thead><tr><th>Book</th><th>Missing</th><th class="c-act">Action</th></tr></thead>
+                        <tbody>
+                        <?php foreach ( $broken as $row ) : ?>
+                                <tr>
+                                        <td><a class="rowlink" href="<?php echo esc_url( aa_admin_url( 'products/' . $row['book']->get_id() . '/edit' ) ); ?>"><?php echo esc_html( $row['book']->get_name() ); ?></a></td>
+                                        <td><span class="pill s-on-hold"><?php echo esc_html( implode( ' + ', $row['issues'] ) ); ?></span></td>
+                                        <td class="c-act"><a class="btn sm pri" href="<?php echo esc_url( aa_admin_url( 'products/' . $row['book']->get_id() . '/edit' ) ); ?>">Fix now</a></td>
+                                </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                </table>
+        </div>
+        <?php endif; ?>
 
         <div class="dash-cols">
                 <div class="card">

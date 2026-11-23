@@ -194,8 +194,7 @@ function aa_hero_panel_swap( $html ) {
         if ( 'product' === $mode && ! empty( $o['product_id'] ) && function_exists( 'wc_get_product' ) ) {
                 $p = wc_get_product( (int) $o['product_id'] );
                 if ( $p && 'publish' === $p->get_status() ) {
-                        $img = get_the_post_thumbnail_url( $p->get_id(), 'medium_large' );
-                        if ( ! $img ) { $img = wc_placeholder_img_src(); }
+                        $img = aa_cover_url( $p->get_id(), 'medium_large' );
                         $author = (string) get_post_meta( $p->get_id(), '_aa_author', true );
                         $price  = wp_strip_all_tags( wc_price( (float) $p->get_price() ) );
                         $book   = array(
@@ -395,7 +394,7 @@ function aa_render_thankyou( $order_id ) {
                         $books[] = array(
                                 'title'  => $item->get_name(),
                                 'author' => (string) get_post_meta( $pid, '_aa_author', true ),
-                                'cover'  => get_the_post_thumbnail_url( $pid, 'medium' ),
+                                'cover'  => aa_cover_url( $pid, 'medium' ),
                                 'price'  => wp_kses_post( wc_price( (float) $item->get_total() ) ),
                                 'qty'    => (int) $item->get_quantity(),
                         );
@@ -762,6 +761,39 @@ function aa_category_count_shortcode( $atts ) {
         return '<span class="aa-showing">Showing <strong>' . esc_html( $n ) . '</strong> ' . ( 1 === $n ? 'ebook' : 'ebooks' ) . '</span>';
 }
 
+/**
+ * Cover URL for a product that is guaranteed to be servable.
+ *
+ * get_the_post_thumbnail_url() happily returns a URL for an attachment whose
+ * file no longer exists on the server (deleted uploads, files overwritten by
+ * a restore, etc.) — the browser then renders a broken image. This helper
+ * checks the underlying file and falls back to the WooCommerce placeholder
+ * whenever the record exists but the file is gone.
+ */
+function aa_cover_url( $product_id, $size = 'large' ) {
+        $pid = (int) $product_id;
+        $img = get_the_post_thumbnail_url( $pid, $size );
+
+        if ( $img ) {
+                $file = get_attached_file( get_post_thumbnail_id( $pid ) );
+                if ( $file && file_exists( $file ) ) {
+                        return $img;
+                }
+        }
+
+        $placeholder = wc_placeholder_img_src( $size );
+        return $placeholder ? $placeholder : (string) $img;
+}
+
+/** True when the product's cover attachment exists but its file is missing. */
+function aa_cover_file_missing( $product_id ) {
+        $thumb_id = (int) get_post_thumbnail_id( (int) $product_id );
+        if ( ! $thumb_id ) { return false; }
+
+        $file = get_attached_file( $thumb_id );
+        return ( ! $file || ! file_exists( $file ) );
+}
+
 /** Render one Stitch-style book card for a product. */
 function aa_book_card( $product_id ) {
         $product = wc_get_product( $product_id );
@@ -769,8 +801,7 @@ function aa_book_card( $product_id ) {
 
         $permalink = get_permalink( $product_id );
         $name      = get_the_title( $product_id );
-        $img       = get_the_post_thumbnail_url( $product_id, 'large' );
-        if ( ! $img ) { $img = wc_placeholder_img_src(); }
+        $img       = aa_cover_url( $product_id, 'large' );
 
         $cat_terms = get_the_terms( $product_id, 'product_cat' );
         $cat       = '';
@@ -961,8 +992,7 @@ function aa_product_single_shortcode() {
         }
 
         $name    = get_the_title( $pid );
-        $img     = get_the_post_thumbnail_url( $pid, 'full' );
-        if ( ! $img ) { $img = wc_placeholder_img_src(); }
+        $img     = aa_cover_url( $pid, 'full' );
 
         $author  = (string) get_post_meta( $pid, '_aa_author', true );
         $format  = (string) get_post_meta( $pid, '_aa_format', true );

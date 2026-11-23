@@ -65,10 +65,49 @@ function aa_admin_products_handle_post() {
 	require_once ABSPATH . 'wp-admin/includes/media.php';
 	require_once ABSPATH . 'wp-admin/includes/image.php';
 
-	$cover_id = 0;
-	if ( ! empty( $_FILES['aa_cover']['name'] ) ) {
-		$cover_id = (int) media_handle_upload( 'aa_cover', 0 );
-		if ( is_wp_error( $cover_id ) ) { $cover_id = 0; }
+	$cover_id    = 0;
+	$cover_error = '';
+
+	if ( ! empty( $_FILES['aa_cover']['name'] ) && file_exists( $_FILES['aa_cover']['tmp_name'] ) ) {
+
+		/**
+		 * Repair-in-place: the book already has a cover attachment whose
+		 * FILE vanished from the server (uploads overwritten by a file
+		 * restore, hosting cleanup, ...) while the database record and
+		 * every URL referencing it survived. Re-writing the new upload
+		 * onto the SAME attachment keeps the image id and the file URL
+		 * stable, so things that reference it directly (Elementor hero
+		 * image, cached pages) resume working without re-picking.
+		 */
+		$old_img_id = 0;
+		if ( $id ) {
+			$old = wc_get_product( $id );
+			if ( $old && $old->get_image_id() ) { $old_img_id = (int) $old->get_image_id(); }
+		}
+
+		$old_file   = ( $old_img_id && get_post( $old_img_id ) ) ? get_attached_file( $old_img_id ) : '';
+		$can_repair = $old_file && ! file_exists( $old_file );
+		$repaired   = false;
+
+		if ( $can_repair ) {
+			$info = @getimagesize( $_FILES['aa_cover']['tmp_name'] );
+			if ( $info && wp_mkdir_p( dirname( $old_file ) ) && @copy( $_FILES['aa_cover']['tmp_name'], $old_file ) ) {
+				@chmod( $old_file, 0644 );
+				clearstatcache();
+				update_attached_file( $old_img_id, $old_file );
+				wp_update_attachment_metadata( $old_img_id, wp_generate_attachment_metadata( $old_img_id, $old_file ) );
+				$cover_id = $old_img_id;
+				$repaired = true;
+			}
+		}
+
+		if ( ! $repaired ) {
+			$cover_id = (int) media_handle_upload( 'aa_cover', 0 );
+			if ( is_wp_error( $cover_id ) ) {
+				$cover_error = $cover_id->get_error_message();
+				$cover_id    = 0;
+			}
+		}
 	}
 
 	$pdf_path = '';
@@ -116,8 +155,30 @@ function aa_admin_products_handle_post() {
 
 	$pid = $product->save();
 
-	wp_safe_redirect( aa_admin_url( 'products/' . $pid . '/edit' ) . '?aa_msg=' . ( $id ? 'product_updated' : 'product_created' ) );
+	// The book itself saved; a failed cover upload must not read as a full success.
+	$msg = ( $cover_error && ! $cover_id ) ? 'cover_failed' : ( $id ? 'product_updated' : 'product_created' );
+
+	wp_safe_redirect( aa_admin_url( 'products/' . $pid . '/edit' ) . '?aa_msg=' . $msg );
 	exit;
+}
+
+/** Resolve a WC download file value (absolute path, wp-content/... or URL) to a local path. */
+function aa_admin_download_path( $file ) {
+	$file = (string) $file;
+	if ( '' === $file || wp_is_stream( $file ) ) { return ''; }
+
+	if ( 0 === strpos( $file, 'http://' ) || 0 === strpos( $file, 'https://' ) ) {
+		$base = home_url( '/' );
+		if ( 0 !== strpos( $file, $base ) ) { return ''; } // off-site file: nothing to check locally
+		$file = wp_normalize_path( ABSPATH ) . str_replace( $base, '', $file );
+	}
+
+	$file = wp_normalize_path( ltrim( $file, '/' ) );
+	if ( 0 === strpos( $file, 'wp-content/' ) ) {
+		return wp_normalize_path( WP_CONTENT_DIR ) . '/' . substr( $file, strlen( 'wp-content/' ) );
+	}
+
+	return wp_normalize_path( WP_CONTENT_DIR ) . '/' . $file;
 }
 
 function aa_admin_products_list() {
@@ -154,7 +215,16 @@ function aa_admin_products_list() {
 				foreach ( $q->posts as $post ) :
 					$p    = wc_get_product( $post->ID );
 					if ( ! $p ) continue;
-					$img  = $p->get_image_id() ? wp_get_attachment_image_url( $p->get_image_id(), 'thumbnail' ) : '';
+					// Only show a thumbnail when the attachment file really exists -- a
+					// deleted/lost file would otherwise render a broken <img>.
+					$img  = '';
+					$img_id = (int) $p->get_image_id();
+					if ( $img_id ) {
+						$img_file = get_attached_file( $img_id );
+						if ( $img_file && file_exists( $img_file ) ) {
+							$img = wp_get_attachment_image_url( $img_id, 'thumbnail' );
+						}
+					}
 					$cats = implode( ', ', wp_list_pluck( $p->get_category_ids() ? get_terms( array( 'taxonomy' => 'product_cat', 'include' => $p->get_category_ids(), 'hide_empty' => false ) ) : array(), 'name' ) );
 					?>
 					<tr>
@@ -218,8 +288,25 @@ function aa_admin_product_form( $id ) {
 	$terms = get_terms( array( 'taxonomy' => 'product_cat', 'hide_empty' => false ) );
 	if ( is_wp_error( $terms ) ) { $terms = array(); }
 	$sel   = $product ? $product->get_category_ids() : array();
-	$cover = $product && $product->get_image_id() ? wp_get_attachment_image_url( $product->get_image_id(), 'medium' ) : '';
-	$dls   = $product ? $product->get_downloads() : array();
+	// Cover: only trust the URL when the file is really on disk.
+	$cover = '';
+	$cover_missing = false;
+	if ( $product && $product->get_image_id() ) {
+		$img_id   = (int) $product->get_image_id();
+		$img_file = get_attached_file( $img_id );
+		if ( $img_file && file_exists( $img_file ) ) {
+			$cover = wp_get_attachment_image_url( $img_id, 'medium' );
+		} else {
+			$cover_missing = true;
+		}
+	}
+
+	$dls = $product ? $product->get_downloads() : array();
+	$pdf_missing = false;
+	if ( $dls ) {
+		$pdf_file = aa_admin_download_path( reset( $dls )->get_file() );
+		$pdf_missing = ( $pdf_file && ! file_exists( $pdf_file ) );
+	}
 	?>
 	<form method="post" action="<?php echo esc_url( aa_admin_url( 'products' ) ); ?>" enctype="multipart/form-data" class="book-form">
 		<?php wp_nonce_field( 'aa_products' ); ?>
@@ -274,7 +361,9 @@ function aa_admin_product_form( $id ) {
 
 				<div class="card side-card">
 					<label>Cover image <?php if ( $cover ) : ?><span class="muted">(replaces current)</span><?php endif; ?></label>
-					<?php if ( $cover ) : ?><img class="cover-preview" src="<?php echo esc_url( $cover ); ?>" alt="Current cover"><?php endif; ?>
+					<?php if ( $cover_missing ) : ?>
+						<p class="fileline warn">Cover file missing on the server — upload a replacement below. Re-uploading repairs the existing image in place, so the homepage hero and old links keep working.</p>
+					<?php elseif ( $cover ) : ?><img class="cover-preview" src="<?php echo esc_url( $cover ); ?>" alt="Current cover"><?php endif; ?>
 					<input type="file" name="aa_cover" accept="image/*">
 					<p class="muted small">Portrait works best (600x900). JPG / PNG / WebP.</p>
 				</div>
@@ -283,6 +372,9 @@ function aa_admin_product_form( $id ) {
 					<label>PDF file <?php if ( $dls ) : ?><span class="muted">(replaces current)</span><?php endif; ?></label>
 					<?php if ( $dls ) : ?>
 						<p class="fileline">Current: <?php echo esc_html( basename( reset( $dls )->get_file() ) ); ?></p>
+						<?php if ( $pdf_missing ) : ?>
+							<p class="fileline warn">PDF file missing on the server — upload it again or customers will not be able to download.</p>
+						<?php endif; ?>
 					<?php else : ?>
 						<p class="muted small">No PDF attached yet — customers need one before they can download.</p>
 					<?php endif; ?>

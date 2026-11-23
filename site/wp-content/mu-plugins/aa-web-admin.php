@@ -44,6 +44,7 @@ function aa_admin_flash() {
                 'product_created'  => array( 'Book added to the store.', 'ok' ),
                 'product_updated'  => array( 'Book updated.', 'ok' ),
                 'product_deleted'  => array( 'Book deleted.', 'ok' ),
+                'cover_failed'     => array( 'The book was saved, but the cover image failed to upload. Check the file (JPG / PNG / WebP, within the server upload limit) and upload it again in the edit form.', 'err' ),
                 'category_created' => array( 'Category created.', 'ok' ),
                 'category_updated' => array( 'Category updated.', 'ok' ),
                 'category_deleted' => array( 'Category deleted.', 'ok' ),
