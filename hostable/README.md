@@ -77,9 +77,10 @@ the two files below are the whole site.
    can be replaced the same way.)
 
 7. **Set your admin access**
-   The admin user in the dump is `admin` with password `admin` —
+   The admin user in the dump is `kartik` with password `Annaadhya!2026` —
    **log into `/wp-admin` and change this password right away**
-   (Users → Profile → Set new password).
+   (Users → Profile → Set new password). You use the same account to open
+   `/web-admin`.
 
 8. **(Recommended) SMTP for the delivery emails**
    PHP `mail()` usually works on Hostinger, but for reliable delivery to

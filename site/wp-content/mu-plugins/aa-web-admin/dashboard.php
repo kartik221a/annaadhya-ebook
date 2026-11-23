@@ -50,6 +50,7 @@ function aa_admin_dashboard() {
                         <h2>Quick actions</h2>
                         <div class="quick">
                                 <a class="btn pri" href="<?php echo esc_url( aa_admin_url( 'products/new' ) ); ?>"><?php echo aa_admin_icon( 'plus' ); ?> Add a book</a>
+                                <a class="btn ghost" href="<?php echo esc_url( aa_admin_url( 'hero' ) ); ?>"><?php echo aa_admin_icon( 'image' ); ?> Change home hero</a>
                                 <a class="btn ghost" href="<?php echo esc_url( aa_admin_url( 'orders' ) ); ?>">View orders</a>
                                 <a class="btn ghost" href="<?php echo esc_url( aa_admin_url( 'downloads' ) ); ?>">Download grants</a>
                                 <a class="btn ghost" href="<?php echo esc_url( aa_admin_url( 'messages' ) ); ?>">Customer messages</a>

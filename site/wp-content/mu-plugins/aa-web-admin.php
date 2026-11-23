@@ -2,13 +2,13 @@
 /**
  * Plugin Name: Annaadhya Web Admin (must-use)
  * Description: Custom admin panel at /web-admin — manage books, categories and orders without wp-admin. Ships as a must-use plugin (always active) and routes through template_redirect, so it needs no rewrite rules and no database state: it works identically on every checkout of this repo.
- * Version:     1.3.0
+ * Version:     1.4.0
  * Author:      Annaadhya
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'AA_ADMIN_VER', '1.3.0' );
+define( 'AA_ADMIN_VER', '1.4.0' );
 define( 'AA_ADMIN_BASE', '/web-admin' );
 // Asset base is built at runtime through home_url() so it follows the incoming
 // host (see aa_portable_url()) — WPMU_PLUGIN_URL is a constant frozen before
@@ -25,6 +25,7 @@ require_once __DIR__ . '/aa-web-admin/render.php';
 require_once __DIR__ . '/aa-web-admin/dashboard.php';
 require_once __DIR__ . '/aa-web-admin/products.php';
 require_once __DIR__ . '/aa-web-admin/categories.php';
+require_once __DIR__ . '/aa-web-admin/hero.php';
 require_once __DIR__ . '/aa-web-admin/orders.php';
 require_once __DIR__ . '/aa-web-admin/downloads.php';
 require_once __DIR__ . '/aa-web-admin/messages.php';
@@ -46,6 +47,12 @@ function aa_admin_flash() {
                 'category_created' => array( 'Category created.', 'ok' ),
                 'category_updated' => array( 'Category updated.', 'ok' ),
                 'category_deleted' => array( 'Category deleted.', 'ok' ),
+                'hero_saved'       => array( 'Hero image updated — the home page shows it immediately.', 'ok' ),
+                'hero_book_saved'  => array( 'Featured book updated — the home page hero shows it immediately.', 'ok' ),
+                'hero_reset'       => array( 'Back to the bundled hero image.', 'ok' ),
+                'hero_nofile'      => array( 'Pick an image file first, then click Save.', 'err' ),
+                'hero_badfile'     => array( 'That file is not a supported image (use JPG, PNG, WebP or GIF).', 'err' ),
+                'hero_toolarge'    => array( 'That image is too large — keep it under 8 MB.', 'err' ),
                 'message_deleted'  => array( 'Message deleted.', 'ok' ),
                 'message_updated'  => array( 'Message marked as handled.', 'ok' ),
                 'subscriber_removed' => array( 'Subscriber removed.', 'ok' ),
@@ -130,6 +137,9 @@ function aa_admin_panel( $path ) {
                         break;
                 case 'categories':
                         aa_admin_categories_router( $sub, $sub2 );
+                        break;
+                case 'hero':
+                        aa_admin_hero_router();
                         break;
                 case 'orders':
                         aa_admin_orders_router( $sub );

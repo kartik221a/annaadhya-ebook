@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Annaadhya Store Tweaks (must-use)
- * Description: Stitch "Obsidian & Gold" storefront plumbing: canvas renderer for all core pages (home, shop, search, product, cart, checkout, account, library, about, contact, legal), [aa_books] product grid, [aa_product_single], [aa_library] (download-limit aware), [aa_auth] (Google + email/password), [aa_contact_form], address-free digital checkout, wishlist (account endpoint + AJAX), newsletter + contact AJAX handlers, cart badge.
- * Version:     2.1.0
+ * Description: Stitch "Obsidian & Gold" storefront plumbing: canvas renderer for all core pages (home, shop, search, product, cart, checkout, account, library, about, contact, legal), [aa_books] product grid, [aa_product_single], [aa_library], [aa_contact_form], address-free digital checkout, wishlist (account endpoint + AJAX), newsletter + contact AJAX handlers, cart badge, branded /thank-you page after every purchase, admin-swappable home-page hero image.
+ * Version:     2.2.0
  * Author:      Annaadhya
  */
 
@@ -129,12 +129,112 @@ function aa_render_canvas( $post_id ) {
         // get_builder_content() (not _for_display) — the display variant bails out
         // with an "avoid recursion" guard when get_the_ID() equals the rendered ID,
         // which is exactly our case (we render the queried page itself).
-        echo \Elementor\Plugin::$instance->frontend->get_builder_content( $post_id, false );
+        echo aa_canvas_content_filter(
+                \Elementor\Plugin::$instance->frontend->get_builder_content( $post_id, false ),
+                $post_id
+        );
 
         echo '</div>';
         wp_footer();
         echo '</body></html>';
         exit;
+}
+
+/* ------------------------------------------------------------------------
+ * Canvas content filter: portable baked-in URLs + the admin hero image.
+ * ---------------------------------------------------------------------- */
+
+/** scheme://host of the incoming request (portable URLs, see aa_portable_url). */
+function aa_incoming_site_url() {
+        $host = isset( $_SERVER['HTTP_HOST'] ) ? (string) $_SERVER['HTTP_HOST'] : '';
+        if ( '' === $host || ! preg_match( '/^[a-z0-9.\-]+(:[0-9]{1,5})?$/i', $host ) ) {
+                return 'http://localhost:8080'; // wp-cli / cron — leave stored URLs untouched
+        }
+        return ( is_ssl() ? 'https' : 'http' ) . '://' . $host;
+}
+
+/**
+ * Fix canvas HTML right before it is printed:
+ *  - Elementor pages bake absolute http://localhost:8080 URLs into their HTML;
+ *    rewrite them to the incoming host so every canvas page renders correctly
+ *    on localhost, a LAN IP, a tunnel or the production domain.
+ *  - On the home page, re-render the hero's featured-book panel from the
+ *    admin's choice in /web-admin (option aa_hero).
+ */
+function aa_canvas_content_filter( $html, $post_id ) {
+        $site = aa_incoming_site_url();
+        if ( 'http://localhost:8080' !== $site ) {
+                $html = str_replace( 'http://localhost:8080', $site, $html );
+        }
+        if ( (int) get_option( 'page_on_front' ) === (int) $post_id ) {
+                $html = aa_hero_panel_swap( $html );
+        }
+        return $html;
+}
+
+/**
+ * Re-render the home hero's featured-book panel from the admin's choice in
+ * /web-admin (option aa_hero):
+ *   mode=product -> show the picked store book (cover, title, author, price,
+ *                   click-through to the product page)
+ *   mode=image   -> show an uploaded custom image with generic overlay text
+ *   (no option / empty mode -> the bundled hero markup renders untouched)
+ * The replacement keeps the original class structure, so the page's own
+ * embedded CSS keeps styling the panel exactly as before.
+ */
+function aa_hero_panel_swap( $html ) {
+        $o = get_option( 'aa_hero', array() );
+        if ( ! is_array( $o ) ) { $o = array(); }
+        $mode = isset( $o['mode'] ) ? (string) $o['mode'] : '';
+        if ( '' === $mode ) { return $html; }
+
+        $book = null;
+        if ( 'product' === $mode && ! empty( $o['product_id'] ) && function_exists( 'wc_get_product' ) ) {
+                $p = wc_get_product( (int) $o['product_id'] );
+                if ( $p && 'publish' === $p->get_status() ) {
+                        $img = get_the_post_thumbnail_url( $p->get_id(), 'medium_large' );
+                        if ( ! $img ) { $img = wc_placeholder_img_src(); }
+                        $author = (string) get_post_meta( $p->get_id(), '_aa_author', true );
+                        $price  = wp_strip_all_tags( wc_price( (float) $p->get_price() ) );
+                        $book   = array(
+                                'href'   => get_permalink( $p->get_id() ),
+                                'img'    => $img,
+                                'alt'    => $p->get_name() . ' ebook cover',
+                                'title'  => $p->get_name(),
+                                'author' => $author ? 'By ' . $author : 'Annaadhya Ebook',
+                                'price'  => $price . ' Only',
+                        );
+                }
+        } elseif ( 'image' === $mode && ! empty( $o['image_url'] ) ) {
+                $book = array(
+                        'href'   => function_exists( 'wc_get_page_id' ) ? get_permalink( wc_get_page_id( 'shop' ) ) : home_url( '/shop/' ),
+                        'img'    => (string) $o['image_url'],
+                        'alt'    => 'Featured ebook',
+                        'title'  => 'Annaadhya Exclusive',
+                        'author' => 'From the Annaadhya shelf',
+                        'price'  => 'Instant PDF',
+                );
+        }
+        if ( ! $book ) { return $html; }
+
+        $book_html = '<a class="aa-book" href="' . esc_url( $book['href'] ) . '">'
+                . '<img src="' . esc_url( $book['img'] ) . '" alt="' . esc_attr( $book['alt'] ) . '">'
+                . '<div class="aa-book-ov"><span class="aa-caps">Featured this week</span>'
+                . '<h4>' . esc_html( $book['title'] ) . '</h4>'
+                . '<p>' . esc_html( $book['author'] ) . '</p></div></a>';
+
+        $html = preg_replace(
+                '/<a class="aa-book"[^>]*>\s*<img[^>]*>\s*<div class="aa-book-ov">.*?<\/div>\s*<\/a>/is',
+                $book_html,
+                $html,
+                1
+        );
+
+        $foot_html = '<div class="aa-panel-foot"><span class="aa-caps">Optimized for iPad &amp; Kindle</span>'
+                . '<span class="aa-panel-price">' . esc_html( $book['price'] ) . '</span></div>';
+        $html = preg_replace( '/<div class="aa-panel-foot">.*?<\/div>/is', $foot_html, $html, 1 );
+
+        return $html;
 }
 
 /* ------------------------------------------------------------------------
@@ -203,6 +303,217 @@ function aa_thankyou_email_note( $text, $order ) {
                 $text .= ' <span class="aa-thanks-email" style="display:inline-flex;align-items:center;gap:8px;margin-left:12px;padding:10px 18px;border-radius:10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);color:var(--aa-goldbg,#f59e0b);font-weight:700"><span class="aa-ms">mark_email_read</span><span>Your PDF is on its way to ' . esc_html( $email ) . '</span></span>';
         }
         return $text;
+}
+
+/* ------------------------------------------------------------------------
+ * Branded thank-you page — every purchase lands on /thank-you?order=..&key=..
+ * (WooCommerce's order-received endpoint renders the exact same page, so
+ * links from earlier emails keep working). The page is order-aware when the
+ * order key validates; without a valid key it shows a generic "check your
+ * inbox" screen and never leaks any order data.
+ * ---------------------------------------------------------------------- */
+
+add_filter( 'woocommerce_get_checkout_order_received_url', 'aa_thankyou_received_url', 10, 2 );
+
+function aa_thankyou_received_url( $url, $order ) {
+        if ( ! $order instanceof WC_Order ) { return $url; }
+        return add_query_arg(
+                array( 'order' => $order->get_id(), 'key' => $order->get_order_key() ),
+                home_url( '/thank-you' )
+        );
+}
+
+add_action( 'template_redirect', 'aa_thankyou_intercept', 1 );
+
+function aa_thankyou_intercept() {
+        if ( is_admin() ) { return; }
+
+        // Pretty /thank-you route on the raw URI (same pattern as /web-admin —
+        // no rewrite rules, nothing stored in the database).
+        $uri  = parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH );
+        $base = trim( parse_url( home_url( '/' ), PHP_URL_PATH ), '/' );
+        if ( '' !== $base ) {
+                $prefix = '/' . $base;
+                if ( $uri === $prefix || 0 === strpos( $uri, $prefix . '/' ) ) {
+                        $uri = substr( $uri, strlen( $prefix ) );
+                }
+        }
+        $path = trim( (string) $uri, '/' );
+        if ( 'thank-you' === $path || 0 === strpos( $path, 'thank-you/' ) ) {
+                aa_render_thankyou( isset( $_GET['order'] ) ? absint( $_GET['order'] ) : 0 );
+                return;
+        }
+
+        // WooCommerce's own order-received endpoint renders the same page.
+        if ( function_exists( 'is_order_received_page' ) && is_order_received_page() ) {
+                aa_render_thankyou( (int) get_query_var( 'order-received' ) );
+        }
+}
+
+/** Load the thank-you order when the key validates (shop managers may preview). */
+function aa_thankyou_load_order( $order_id ) {
+        if ( ! $order_id || ! function_exists( 'wc_get_order' ) ) { return false; }
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) { return false; }
+
+        $key = isset( $_GET['key'] ) ? wc_clean( wp_unslash( $_GET['key'] ) ) : '';
+        if ( '' !== $key ) {
+                return hash_equals( (string) $order->get_order_key(), $key ) ? $order : false;
+        }
+        return current_user_can( 'manage_woocommerce' ) ? $order : false;
+}
+
+function aa_render_thankyou( $order_id ) {
+        status_header( 200 );
+        nocache_headers();
+
+        $order   = aa_thankyou_load_order( $order_id );
+        $shop    = function_exists( 'wc_get_page_id' ) ? get_permalink( wc_get_page_id( 'shop' ) ) : home_url( '/shop/' );
+        $support = get_permalink( get_page_by_path( 'contact' ) );
+        if ( ! $support ) { $support = home_url( '/contact/' ); }
+        $home    = home_url( '/' );
+
+        $first = '';
+        $email = '';
+        $books = array();
+        $total = '';
+        $meta  = '';
+        $paid  = false;
+
+        if ( $order ) {
+                $first = (string) $order->get_billing_first_name();
+                $email = (string) $order->get_billing_email();
+                $total = wp_kses_post( $order->get_formatted_order_total() );
+                $num   = (string) $order->get_order_number();
+                $date  = $order->get_date_created() ? $order->get_date_created()->date_i18n( 'F j, Y' ) : '';
+                $paid  = $order->is_paid() || in_array( $order->get_status(), array( 'completed', 'processing' ), true );
+
+                foreach ( $order->get_items() as $item ) {
+                        $pid     = $item->get_product_id();
+                        $books[] = array(
+                                'title'  => $item->get_name(),
+                                'author' => (string) get_post_meta( $pid, '_aa_author', true ),
+                                'cover'  => get_the_post_thumbnail_url( $pid, 'medium' ),
+                                'price'  => wp_kses_post( wc_price( (float) $item->get_total() ) ),
+                                'qty'    => (int) $item->get_quantity(),
+                        );
+                }
+                $meta = '<span class="aa-ty-meta">Order #' . esc_html( $num ) . ' &middot; ' . esc_html( $date ) . '</span>'
+                        . '<span class="aa-ty-pill aa-ty-pill-' . esc_attr( $order->get_status() ) . '">' . esc_html( wc_get_order_status_name( $order->get_status() ) ) . '</span>';
+        }
+
+        $headline = ( $order && '' !== $first )
+                ? 'Thank you, ' . esc_html( $first ) . '!'
+                : 'Thank you for your purchase!';
+
+        $one = ( 1 === count( $books ) );
+        if ( $paid ) {
+                $lead = 'Your book' . ( $one ? ' is' : 's are' ) . ' on the way to '
+                        . ( $email ? '<strong>' . esc_html( $email ) . '</strong>' : 'your inbox' )
+                        . ' — the PDF' . ( $one ? '' : 's' ) . ' land' . ( $one ? 's' : '' )
+                        . ' within a minute or two. Don\'t see it? Check your spam folder, it happens.';
+        } elseif ( $order ) {
+                $lead = 'We\'ve received your order. Your PDF' . ( $one ? '' : 's' ) . ' will land in '
+                        . ( $email ? '<strong>' . esc_html( $email ) . '</strong>' : 'your inbox' )
+                        . ' the moment your order is confirmed — the delivery email carries the file' . ( $one ? '' : 's' ) . ' attached, plus permanent re-download links.';
+        } else {
+                $lead = 'Annaadhya books are delivered straight to the email address you used at checkout — no account, no download limits. Just completed an order? The PDFs are already on their way.';
+        }
+
+        $rows = '';
+        foreach ( $books as $b ) {
+                $rows .= '<div class="aa-ty-row">'
+                        . ( $b['cover'] ? '<img class="aa-ty-cover" src="' . esc_url( $b['cover'] ) . '" alt="' . esc_attr( $b['title'] ) . ' ebook cover">' : '' )
+                        . '<div class="aa-ty-rowinfo"><strong>' . esc_html( $b['title'] ) . '</strong>'
+                        . ( $b['author'] ? '<span>' . esc_html( $b['author'] ) . '</span>' : '' )
+                        . '<em>PDF &middot; instant download' . ( $b['qty'] > 1 ? ' &times; ' . (int) $b['qty'] : '' ) . '</em></div>'
+                        . '<span class="aa-ty-price">' . $b['price'] . '</span>'
+                        . '</div>';
+        }
+
+        $books_card = '';
+        if ( $rows ) {
+                $books_card = '<div class="aa-ty-books">'
+                        . '<div class="aa-ty-books-head">Your books</div>'
+                        . $rows
+                        . '<div class="aa-ty-total"><span>Total' . ( $paid ? ' paid' : ' due' ) . '</span><strong>' . $total . '</strong></div>'
+                        . '</div>';
+        }
+
+        ?><!DOCTYPE html>
+<html <?php language_attributes(); ?>>
+<head>
+<meta charset="<?php bloginfo( 'charset' ); ?>">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Thank you — <?php bloginfo( 'name' ); ?></title>
+<?php wp_head(); ?>
+<style>
+.aa-ty{min-height:100vh;background:#0a0e13;color:#e0e2ea;display:flex;flex-direction:column}
+.aa-ty-band{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 22px;border-bottom:1px solid rgba(160,142,122,.18)}
+.aa-ty-brand{display:inline-flex;align-items:center;gap:10px;color:#ffc174;font-weight:800;font-size:18px;letter-spacing:.04em;text-decoration:none}
+.aa-ty-mark{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:11px;background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.4);color:#f59e0b;font-size:18px;font-weight:800}
+.aa-ty-bandlink{display:inline-flex;align-items:center;gap:7px;color:#d8c3ad;font-size:13px;font-weight:700;text-decoration:none;border:1px solid rgba(160,142,122,.3);border-radius:9px;padding:8px 14px}
+.aa-ty-bandlink:hover{border-color:rgba(245,158,11,.5);color:#ffc174}
+.aa-ty-main{flex:1;display:flex;justify-content:center;padding:34px 16px 48px}
+.aa-ty-card{width:100%;max-width:640px;background:#101419;border:1px solid rgba(160,142,122,.25);border-radius:18px;padding:30px 26px 26px;box-shadow:0 18px 50px rgba(0,0,0,.45)}
+.aa-ty-check{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto;color:#f59e0b;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.45)}
+.aa-ty-card h1{margin:16px 0 0;text-align:center;font-size:26px;line-height:1.25;color:#e0e2ea}
+.aa-ty-metarow{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px;margin-top:12px}
+.aa-ty-meta{color:#8b8fa3;font-size:12px;font-weight:700;letter-spacing:.05em}
+.aa-ty-pill{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#ffc174;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:999px;padding:4px 11px}
+.aa-ty-pill-on-hold{color:#f5c98a;background:rgba(245,196,138,.1);border-color:rgba(245,196,138,.4)}
+.aa-ty-pill-pending{color:#f5c98a;background:rgba(245,196,138,.1);border-color:rgba(245,196,138,.4)}
+.aa-ty-lead{margin:18px 0 0;text-align:center;color:#d8c3ad;font-size:14.5px;line-height:1.75}
+.aa-ty-lead strong{color:#ffc174}
+.aa-ty-books{margin-top:24px;background:#181c21;border:1px solid rgba(160,142,122,.22);border-radius:14px;overflow:hidden}
+.aa-ty-books-head{padding:13px 18px 3px;color:#8b8fa3;font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+.aa-ty-row{display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid rgba(160,142,122,.16)}
+.aa-ty-cover{width:52px;height:auto;border-radius:7px;border:1px solid rgba(160,142,122,.4);flex:0 0 auto}
+.aa-ty-rowinfo{flex:1;min-width:0}
+.aa-ty-rowinfo strong{display:block;color:#e0e2ea;font-size:14.5px;line-height:1.35}
+.aa-ty-rowinfo span{display:block;color:#8b8fa3;font-size:12px;padding-top:2px}
+.aa-ty-rowinfo em{display:block;font-style:normal;color:#d8c3ad;font-size:11.5px;padding-top:5px;font-weight:700}
+.aa-ty-price{color:#e0e2ea;font-weight:700;font-size:14px;white-space:nowrap}
+.aa-ty-total{display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:14px 18px;color:#8b8fa3;font-size:13px}
+.aa-ty-total strong{color:#ffc174;font-size:16px}
+.aa-ty-btns{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-top:26px}
+.aa-ty-btn,.aa-ty-btn-ghost{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:800;font-size:14px;border-radius:11px;padding:12px 22px}
+.aa-ty-btn{background:#f59e0b;color:#472a00}
+.aa-ty-btn:hover{background:#ffc174}
+.aa-ty-btn-ghost{border:1px solid rgba(160,142,122,.35);color:#d8c3ad}
+.aa-ty-btn-ghost:hover{border-color:rgba(245,158,11,.5);color:#ffc174}
+.aa-ty-foot{margin:22px 0 0;text-align:center;color:#8b8fa3;font-size:12px;line-height:1.7}
+@media (max-width:560px){.aa-ty-band{flex-direction:column;align-items:flex-start}.aa-ty-card{padding:24px 18px 22px}}
+</style>
+</head>
+<body <?php body_class( 'aa-canvas aa-ty' ); ?>>
+<?php wp_body_open(); ?>
+<div class="aa-ty">
+        <header class="aa-ty-band">
+                <a class="aa-ty-brand" href="<?php echo esc_url( $home ); ?>"><span class="aa-ty-mark">A</span>Annaadhya</a>
+                <a class="aa-ty-bandlink" href="<?php echo esc_url( $shop ); ?>"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16l1.5 6H2.5Z"/><path d="M4 10v10h16V10"/><path d="M9 20v-6h6v6"/></svg><span>Back to the store</span></a>
+        </header>
+        <main class="aa-ty-main">
+                <div class="aa-ty-card">
+                        <div class="aa-ty-check"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg></div>
+                        <h1><?php echo $headline; // phpcs:ignore WordPress.Security.EscapeOutput ?></h1>
+                        <?php if ( $meta ) : ?><div class="aa-ty-metarow"><?php echo $meta; // phpcs:ignore WordPress.Security.EscapeOutput ?></div><?php endif; ?>
+                        <p class="aa-ty-lead"><?php echo $lead; // phpcs:ignore WordPress.Security.EscapeOutput ?></p>
+                        <?php echo $books_card; // phpcs:ignore WordPress.Security.EscapeOutput ?>
+                        <div class="aa-ty-btns">
+                                <a class="aa-ty-btn" href="<?php echo esc_url( $shop ); ?>"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h7a3 3 0 0 1 3 3v13a2.5 2.5 0 0 0-2.5-2.5H2z"/><path d="M22 4h-7a3 3 0 0 0-3 3v13a2.5 2.5 0 0 1 2.5-2.5H22z"/></svg><span>Browse the bookshelf</span></a>
+                                <a class="aa-ty-btn-ghost" href="<?php echo esc_url( $support ); ?>"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg><span>Contact &amp; support</span></a>
+                        </div>
+                        <p class="aa-ty-foot">The delivery email is your receipt too &mdash; keep it safe; its re-download links never expire.<br>Need a hand? Reply to that email or use the contact page &mdash; a human reads every message.</p>
+                </div>
+        </main>
+</div>
+<?php wp_footer(); ?>
+</body>
+</html>
+        <?php
+        exit;
 }
 
 /* ------------------------------------------------------------------------
