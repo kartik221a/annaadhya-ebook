@@ -186,6 +186,8 @@ function aa_hero_panel_swap( $html ) {
         $o = get_option( 'aa_hero', array() );
         if ( ! is_array( $o ) ) { $o = array(); }
         $mode = isset( $o['mode'] ) ? (string) $o['mode'] : '';
+        // v2 picker (/web-admin/hero) saves just product_id — treat it as mode=product.
+        if ( '' === $mode && ! empty( $o['product_id'] ) ) { $mode = 'product'; }
         if ( '' === $mode ) { return $html; }
 
         $book = null;
