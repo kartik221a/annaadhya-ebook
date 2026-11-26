@@ -2,13 +2,32 @@
 
 Everything in this folder is ready to put your store on a live host
 (Hostinger, or any host with PHP + MySQL). No building, no zipping —
-the two files below are the whole site.
+the files below are the whole site.
 
 | File | What it is | Where it goes |
 | --- | --- | --- |
-| `annaadhya-ebooks.sql` | Full MySQL database dump (phpMyAdmin-ready): all products, pages, settings, users | hPanel → **Databases → phpMyAdmin → Import** |
-| `annaadhya-ebooks-site.zip` | The complete WordPress site (code, themes, plugins, covers, PDFs) | **Files → File Manager** → upload into `public_html` → Extract |
-| `wp-config.php` | Production config template (already inside the zip) | Fill in 4 values (see below) |
+| `annaadhya-ebooks.sql` | Full MySQL database dump (phpMyAdmin-ready): all products, pages, settings, users | hPanel → **Databases → phpMyAdmin → Import** — **first install only** |
+| `annaadhya-ebooks-site.zip` | The complete WordPress site (code, themes, plugins, covers, PDFs) | **Files → File Manager** → upload into `public_html` → Extract — **first install only** |
+| `annaadhya-mu-plugins-only.zip` | Update pack: just `wp-content/mu-plugins/` (all store code) | Extract into `public_html` — **this is how every future update is applied** |
+| `wp-config.php` | Production config template (already inside the zip) | Fill in 4 values (see below) — **first install only** |
+
+## Updating an existing install — READ THIS FIRST
+
+The full zip + SQL dump are for the **first install only**. Your books, covers,
+PDFs, orders, subscribers and the hero pick all live in `wp-content/uploads/`
+and in the database — a full re-deploy or SQL re-import **wipes them**.
+
+To apply an update:
+
+1. Download `annaadhya-mu-plugins-only.zip` from this folder.
+2. Upload it into `public_html` and Extract. It contains exactly one folder,
+   `wp-content/mu-plugins/` — every piece of store code. Extracting it only
+   replaces code files; your uploads, wp-config.php and database are untouched.
+3. Refresh the site. Nothing else: mu-plugins load automatically, no activation.
+
+Never re-extract `annaadhya-ebooks-site.zip` over a live site, and never
+re-import the `.sql` on a live store — the database is only touched again
+when a change is explicitly marked as requiring a re-import (none so far).
 
 ## How the store works (no accounts!)
 
@@ -97,9 +116,9 @@ the two files below are the whole site.
    define( 'AA_SMTP_FROM_NAME', 'Annaadhya Ebooks' );
    ```
 
-9. **Test the flow**: open the store in an incognito window, add a book,
-   checkout as a guest with a real email, pay with COD demo → complete the
-   order in `/web-admin` → check the email arrives with the PDF attached.
+9. **Test the flow**: open the store in an incognito window, hit **Buy now**
+   on any book, checkout as a guest with a real email, pay with COD demo →
+   complete the order in `/web-admin` → check the email arrives with the PDF attached.
 
 ## Local development (docker compose)
 

@@ -60,9 +60,9 @@ p,h1,h2,h3,h4{margin:0}
 .aa-nav-search input{width:100%;background:var(--aa-bg);border:1px solid var(--aa-line2);border-radius:10px;padding:8px 10px 8px 34px;color:var(--aa-tx);font-size:13px;outline:none;font-family:inherit}
 .aa-nav-search input::placeholder{color:#7a7f8f}
 .aa-nav-search .aa-ms{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:18px;color:var(--aa-dim);pointer-events:none}
-.aa-cartbtn,.aa-actbtn{position:relative;padding:9px;border-radius:10px;background:var(--aa-cont);border:1px solid var(--aa-line2);color:var(--aa-warm)!important;text-decoration:none!important;display:flex}
-.aa-cartbtn .aa-ms,.aa-actbtn .aa-ms{font-size:20px}
-.aa-cartbtn:hover,.aa-actbtn:hover{color:var(--aa-gold)!important;border-color:var(--aa-gold)}
+.aa-actbtn{position:relative;padding:9px;border-radius:10px;background:var(--aa-cont);border:1px solid var(--aa-line2);color:var(--aa-warm)!important;text-decoration:none!important;display:flex}
+.aa-actbtn .aa-ms{font-size:20px}
+.aa-actbtn:hover{color:var(--aa-gold)!important;border-color:var(--aa-gold)}
 .aa-wishbtn{position:absolute;top:10px;right:10px;z-index:2;width:34px;height:34px;border-radius:50%;background:rgba(10,14,19,.72);backdrop-filter:blur(4px);border:1px solid var(--aa-line2);color:#c9b8a4!important;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;transition:color .15s,border-color .15s,transform .15s}
 .aa-wishbtn .aa-ms{font-size:17px}
 .aa-wishbtn:hover{color:var(--aa-goldbg)!important;border-color:var(--aa-goldbg);transform:scale(1.06)}
@@ -70,8 +70,6 @@ p,h1,h2,h3,h4{margin:0}
 .aa-wishbtn.aa-on .aa-ms{font-variation-settings:'FILL' 1}
 .aa-toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(16px);z-index:2000;background:var(--aa-high);color:var(--aa-tx);font-size:13px;font-weight:600;border:1px solid var(--aa-goldbg);border-radius:10px;padding:12px 18px;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;box-shadow:0 12px 32px rgba(0,0,0,.5)}
 .aa-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.aa-cartcount{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:9px;background:var(--aa-goldbg);color:var(--aa-ongold);font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px}
-.aa-cartcount[hidden]{display:none}
 .aa-nav-cta{display:none!important}
 @media(min-width:768px){.aa-nav-cta{display:inline-flex!important;padding:10px 16px}}
 .aa-burger{display:flex;background:none;border:0;color:var(--aa-warm);cursor:pointer;padding:6px}
@@ -128,9 +126,6 @@ p,h1,h2,h3,h4{margin:0}
 .aa-now ins{text-decoration:none;background:none;color:var(--aa-tx)}
 .aa-now .aa-only{font-size:20px;font-weight:800}
 .aa-save{font-size:10px;font-weight:800;color:var(--aa-gold)}
-.aa-add{display:inline-flex;align-items:center;gap:7px;background:var(--aa-goldbg);color:var(--aa-ongold)!important;font-weight:700;font-size:13px;padding:9px 14px;border-radius:10px;text-decoration:none!important;transition:filter .15s;white-space:nowrap}
-.aa-add:hover{filter:brightness(1.08)}
-.aa-add .aa-ms{font-size:17px}
 .aa-empty{grid-column:1/-1;text-align:center;color:var(--aa-dim);padding:48px 0;font-size:15px}
 /* Phones: 2 books per row with a compact card variant */
 @media(max-width:640px){
@@ -154,8 +149,6 @@ p,h1,h2,h3,h4{margin:0}
   .aa-now .aa-only{font-size:16px}
   .aa-now del{font-size:11px}
   .aa-save{font-size:9px;white-space:nowrap}
-  .aa-add{font-size:11px;padding:9px 10px;justify-content:center;border-radius:9px}
-  .aa-add .aa-ms{font-size:15px}
 }
 /* ---- pager ---- */
 .aa-pager-wrap{display:flex;flex-direction:column;gap:14px;align-items:center;margin-top:36px}
@@ -191,10 +184,6 @@ function aa_nav_html( $active = '' ) {
         <span class="aa-ms">search</span>
         <input type="search" name="book" placeholder="Quick search books..." aria-label="Search books">
       </form>
-      <a class="aa-cartbtn" href="/cart/" aria-label="Cart">
-        <span class="aa-ms">shopping_bag</span>
-        <span class="aa-cartcount" data-aa-cartcount hidden>0</span>
-      </a>
       <a class="aa-btn-gold aa-nav-cta" href="/shop/"><span>Browse Books</span><span class="aa-ms">arrow_forward</span></a>
       <button class="aa-burger" type="button" aria-label="Open menu"><span class="aa-ms">menu</span></button>
     </div>
@@ -204,7 +193,6 @@ function aa_nav_html( $active = '' ) {
     <a href="/shop/">Shop</a>
     <a href="/about/">About</a>
     <a href="/contact/">Contact</a>
-    <a href="/cart/">Cart</a>
   </div>
 </header>
 <nav class="aa-tabbar" aria-label="Mobile tab bar">
@@ -212,7 +200,6 @@ function aa_nav_html( $active = '' ) {
   <a href="/shop/" class="' . $cls( 'shop' ) . '"><span class="aa-ms">storefront</span><span>Shop</span></a>
   <button type="button" data-aa-search aria-label="Search"><span class="aa-ms">search</span><span>Search</span></button>
   <a href="/my-account/" class="' . $cls( 'account' ) . '"><span class="aa-ms">favorite</span><span>Wishlist</span></a>
-  <a href="/cart/" class="' . $cls( 'cart' ) . '"><span class="aa-ms">shopping_bag</span><span>Cart</span></a>
 </nav>
 <div class="aa-searchsheet" id="aa-searchsheet" hidden>
   <form class="aa-ss-in" action="/shop/" method="get">
@@ -286,7 +273,6 @@ function aa_footer_html() {
           <li><a href="/contact/">Contact Support</a></li>
           <li><a href="/about/">About Us</a></li>
           <li><a href="/my-account/">Wishlist</a></li>
-          <li><a href="/cart/">Shopping Cart</a></li>
           <li><a href="/web-admin/">Site Admin</a></li>
         </ul>
       </div>
@@ -314,19 +300,6 @@ function aa_footer_html() {
   </div>
   <script>
 (function(){
-  function refreshCart(){
-    fetch("/?wc-ajax=aa_cart_count",{headers:{"Cache-Control":"no-cache"}})
-      .then(function(r){return r.ok?r.json():Promise.reject()})
-      .then(function(d){var n=d&&d.count||0;
-        document.querySelectorAll("[data-aa-cartcount]").forEach(function(b){b.textContent=n;b.hidden=n<1})})
-      .catch(function(){});
-  }
-  refreshCart();
-  if(window.jQuery){jQuery(document.body).on("added_to_cart",refreshCart)}
-  document.addEventListener("click",function(e){
-    var t=e.target.closest?e.target.closest(".add_to_cart_button"):null;
-    if(t){setTimeout(refreshCart,1500)}
-  },true);
   var burger=document.querySelector(".aa-burger"),mm=document.querySelector(".aa-mobile-menu");
   if(burger&&mm){burger.addEventListener("click",function(){mm.classList.toggle("open")})}
   var ssheet=document.getElementById("aa-searchsheet");

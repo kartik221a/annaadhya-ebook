@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Annaadhya Store Tweaks (must-use)
- * Description: Stitch "Obsidian & Gold" storefront plumbing: canvas renderer for all core pages (home, shop, search, product, cart, checkout, account, library, about, contact, legal), [aa_books] product grid, [aa_product_single], [aa_library], [aa_contact_form], address-free digital checkout, wishlist (account endpoint + AJAX), newsletter + contact AJAX handlers, cart badge, branded /thank-you page after every purchase, admin-swappable home-page hero image.
+ * Description: Stitch "Obsidian & Gold" storefront plumbing: canvas renderer for all core pages (home, shop, search, product, checkout, account, library, about, contact, legal), [aa_books] product grid, [aa_product_single], [aa_library], [aa_contact_form], address-free digital checkout, wishlist (account endpoint + AJAX), newsletter + contact AJAX handlers, cart-free Buy-now-only storefront (no cart page, no add-to-cart anywhere), branded /thank-you page after every purchase, admin-swappable home-page hero image.
  * Version:     2.2.0
  * Author:      Annaadhya
  */
@@ -58,11 +58,6 @@ function aa_canvas_for_storefront( $tpl ) {
                 // grid reads the search term, so results keep the Stitch shell.
                 if ( $shop > 0 && is_search() && '' !== get_search_query( false ) ) {
                         aa_render_canvas( $shop );
-                }
-
-                $cart_id = (int) wc_get_page_id( 'cart' );
-                if ( $cart_id > 0 && is_cart() ) {
-                        aa_render_canvas( $cart_id );
                 }
 
                 // [woocommerce_checkout] itself renders order-pay + order-received views.
@@ -169,6 +164,27 @@ function aa_canvas_content_filter( $html, $post_id ) {
         if ( (int) get_option( 'page_on_front' ) === (int) $post_id ) {
                 $html = aa_hero_panel_swap( $html );
         }
+        $html = aa_strip_cart_ui( $html );
+        return $html;
+}
+
+/**
+ * The store is Buy-now-only: strip every cart UI element the older baked
+ * Elementor pages still carry (header cart button, mobile-menu + tab-bar Cart
+ * entries, footer "Shopping Cart" link, badge spans) right before printing.
+ * Covers production installs whose database still stores the old templates —
+ * nothing needs to be re-imported or rebuilt for the cart to disappear.
+ */
+function aa_strip_cart_ui( $html ) {
+        if ( false === strpos( $html, '/cart/' ) && false === strpos( $html, 'aa-cartcount' ) ) {
+                return $html; // page carries no cart markup at all
+        }
+        // Footer list-items first, so no empty <li> shells stay behind.
+        $html = preg_replace( '#<li>\s*<a href="/cart/">[^<]*</a>\s*</li>#i', '', $html );
+        // Every remaining /cart/ anchor: header cart button, mobile menu, tab bar.
+        $html = preg_replace( '#<a[^>]*href="/cart/"[^>]*>.*?</a>#is', '', $html );
+        // Defensive: stray badge spans (they normally ship inside the removed anchor).
+        $html = preg_replace( '#<span class="aa-cartcount"[^>]*>\s*</span>#i', '', $html );
         return $html;
 }
 
@@ -239,17 +255,11 @@ function aa_hero_panel_swap( $html ) {
 }
 
 /* ------------------------------------------------------------------------
- * Cart badge plumbing for the custom Stitch header.
+ * Cart-free storefront: the header cart badge is gone. The tiny wc-ajax
+ * counter endpoint below stays alive ONLY because pages baked before the
+ * cart removal still ping it from their footer script — it answers a bare
+ * count and renders nothing, so customers never see any cart UI.
  * ---------------------------------------------------------------------- */
-
-add_filter( 'woocommerce_add_to_cart_fragments', 'aa_cart_count_fragment' );
-
-function aa_cart_count_fragment( $fragments ) {
-        $count = ( function_exists( 'WC' ) && WC()->cart ) ? WC()->cart->get_cart_contents_count() : 0;
-        $hidden = $count < 1 ? ' hidden' : '';
-        $fragments['[data-aa-cartcount]'] = '<span class="aa-cartcount" data-aa-cartcount' . $hidden . '>' . esc_html( $count ) . '</span>';
-        return $fragments;
-}
 
 add_action( 'wc_ajax_aa_cart_count', 'aa_cart_count_endpoint' );
 
@@ -259,21 +269,60 @@ function aa_cart_count_endpoint() {
 }
 
 /* ------------------------------------------------------------------------
- * Buy now — one click from any card or product page straight to checkout.
+ * No cart anywhere: /cart/ (and every stray cart URL) lands on the shop
+ * instead, and WooCommerce's cart-fragment / add-to-cart scripts are not
+ * loaded at all. The internal cart still exists because WooCommerce's
+ * checkout needs it — Buy now fills it silently and goes straight to
+ * checkout; the customer just never visits it.
+ * ---------------------------------------------------------------------- */
+
+add_action( 'template_redirect', 'aa_no_cart_redirect', 1 );
+
+function aa_no_cart_redirect() {
+        if ( is_admin() ) { return; }
+        if ( function_exists( 'is_cart' ) && is_cart() ) {
+                $shop = ( function_exists( 'wc_get_page_id' ) && wc_get_page_id( 'shop' ) > 0 )
+                        ? get_permalink( wc_get_page_id( 'shop' ) )
+                        : home_url( '/shop/' );
+                wp_safe_redirect( $shop ? $shop : home_url( '/' ), 301 );
+                exit;
+        }
+}
+
+add_action( 'wp_enqueue_scripts', 'aa_drop_cart_scripts', 99 );
+
+function aa_drop_cart_scripts() {
+        if ( is_admin() ) { return; }
+        foreach ( array( 'wc-cart-fragments', 'wc-add-to-cart' ) as $handle ) {
+                wp_dequeue_script( $handle );
+                wp_deregister_script( $handle );
+        }
+}
+
+/* ------------------------------------------------------------------------
+ * Buy now — the only way to buy, one click from any card or product page
+ * straight to checkout.
  *
  * The button is a plain link to /checkout/?aa-buy-now=ID. On wp_loaded we
  * pick it up, put the ebook in the cart (digital goods are never duplicated
  * — an already-carted title jumps straight to checkout) and land the
- * customer on the address-free checkout page. Add to cart stays untouched.
+ * customer on the address-free checkout page. Legacy /?add-to-cart=ID links
+ * (bookmarks, old emails) are treated as Buy now too — they hit this same
+ * handler before WooCommerce's own form action ever fires.
  * ---------------------------------------------------------------------- */
 
 add_action( 'wp_loaded', 'aa_buy_now_redirect', 5 );
 
 function aa_buy_now_redirect() {
-        if ( is_admin() || empty( $_GET['aa-buy-now'] ) ) { return; }
+        if ( is_admin() ) { return; }
         if ( ! function_exists( 'wc_get_product' ) || ! function_exists( 'WC' ) ) { return; }
 
-        $pid = absint( wp_unslash( $_GET['aa-buy-now'] ) );
+        $pid = 0;
+        if ( ! empty( $_GET['aa-buy-now'] ) ) {
+                $pid = absint( wp_unslash( $_GET['aa-buy-now'] ) );
+        } elseif ( ! empty( $_GET['add-to-cart'] ) ) {
+                $pid = absint( wp_unslash( $_GET['add-to-cart'] ) );
+        }
         if ( ! $pid ) { return; }
 
         $product = wc_get_product( $pid );
@@ -313,11 +362,7 @@ function aa_buy_now_css() {
                 . '.aa-buy{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--aa-goldbg,#f59e0b);color:var(--aa-ongold,#472a00)!important;font-weight:700;font-size:13px;padding:9px 14px;border-radius:10px;text-decoration:none!important;transition:filter .15s;white-space:nowrap}'
                 . '.aa-buy:hover{filter:brightness(1.08)}'
                 . '.aa-buy .aa-ms{font-size:17px}'
-                . '.aa-add.aa-add-sec{background:var(--aa-cont,#1c2025);border:1px solid var(--aa-line2,rgba(160,142,122,.4));color:var(--aa-tx,#e0e2ea)!important;transition:border-color .15s,color .15s}'
-                . '.aa-add.aa-add-sec:hover{border-color:var(--aa-gold,#ffc174);color:var(--aa-gold,#ffc174)!important;filter:none}'
-                . '.aa-btn-gold.aa-btn-sec{background:var(--aa-cont,#1c2025);border:1px solid var(--aa-line2,rgba(160,142,122,.4));color:var(--aa-tx,#e0e2ea)!important;transition:border-color .15s,color .15s}'
-                . '.aa-btn-gold.aa-btn-sec:hover{border-color:var(--aa-gold,#ffc174);color:var(--aa-gold,#ffc174)!important;filter:none;transform:none}'
-                . '@media(max-width:640px){.aa-buygrp{display:grid;grid-template-columns:1fr;gap:6px}.aa-buygrp .aa-add,.aa-buygrp .aa-buy{justify-content:center}.aa-buy{font-size:11px;padding:9px 10px;border-radius:9px}}'
+                . '@media(max-width:640px){.aa-buygrp{display:grid;grid-template-columns:1fr;gap:6px}.aa-buygrp .aa-buy{justify-content:center}.aa-buy{font-size:11px;padding:9px 10px;border-radius:9px}}'
                 . '</style>';
 }
 
@@ -900,8 +945,6 @@ function aa_book_card( $product_id ) {
                 ? '<div class="aa-stars">' . $stars . '<span class="aa-rate">' . esc_html( $rating ) . '/5</span></div>'
                 : '';
 
-        $add_url  = add_query_arg( 'add-to-cart', $product_id, home_url( '/' ) );
-        $cart_cls = $product->supports( 'ajax_add_to_cart' ) ? 'add_to_cart_button ajax_add_to_cart' : 'add_to_cart_button';
         $buy_url  = aa_buy_now_url( $product_id );
         $show_buy = $product->is_type( 'simple' ) && $product->is_purchasable() && $product->is_in_stock();
 
@@ -931,16 +974,13 @@ function aa_book_card( $product_id ) {
                         <span class="aa-now"><?php echo $price_html; // phpcs:ignore WordPress.Security.EscapeOutput ?></span>
                         <?php if ( $save_html ) : ?><span class="aa-save"><?php echo esc_html( $save_html ); ?></span><?php endif; ?>
                 </div>
+                <?php if ( $show_buy ) : ?>
                 <div class="aa-buygrp">
-                        <a class="aa-add aa-add-sec <?php echo esc_attr( $cart_cls ); ?>" data-product_id="<?php echo esc_attr( $product_id ); ?>" data-quantity="1" href="<?php echo esc_url( $add_url ); ?>">
-                                <span class="aa-ms">shopping_cart</span><span>Add to cart</span>
-                        </a>
-                        <?php if ( $show_buy ) : ?>
                         <a class="aa-buy" href="<?php echo esc_url( $buy_url ); ?>">
                                 <span class="aa-ms">bolt</span><span>Buy now</span>
                         </a>
-                        <?php endif; ?>
                 </div>
+                <?php endif; ?>
         </div>
 </li>
         <?php
@@ -1098,8 +1138,6 @@ function aa_product_single_shortcode() {
                 $save_html  = '';
         }
 
-        $add_url  = add_query_arg( 'add-to-cart', $pid, home_url( '/' ) );
-        $cart_cls = $product->supports( 'ajax_add_to_cart' ) ? 'add_to_cart_button ajax_add_to_cart' : 'add_to_cart_button';
         $buy_url  = aa_buy_now_url( $pid );
         $show_buy = $product->is_type( 'simple' ) && $product->is_purchasable() && $product->is_in_stock();
 
@@ -1173,7 +1211,6 @@ function aa_product_single_shortcode() {
                                 <div class="aa-pdp-price"><?php echo $price_html; // phpcs:ignore WordPress.Security.EscapeOutput ?><?php echo $save_html; // phpcs:ignore WordPress.Security.EscapeOutput ?></div>
                                 <div class="aa-pdp-cta">
                                         <?php if ( $show_buy ) : ?><a class="aa-btn-gold" href="<?php echo esc_url( $buy_url ); ?>"><span class="aa-ms">bolt</span><span>Buy now</span></a><?php endif; ?>
-                                        <a class="aa-btn-gold aa-btn-sec <?php echo esc_attr( $cart_cls ); ?>" data-product_id="<?php echo esc_attr( $pid ); ?>" data-quantity="1" href="<?php echo esc_url( $add_url ); ?>"><span class="aa-ms">shopping_cart</span><span>Add to cart</span></a>
                                         <?php if ( $sample_url ) : ?><a class="aa-btn-ghost" href="<?php echo esc_url( $sample_url ); ?>" target="_blank" rel="noopener"><span class="aa-ms">menu_book</span><span>Read sample</span></a><?php endif; ?>
                                         <button type="button" class="aa-wishbtn aa-wishbtn-lg" data-id="<?php echo esc_attr( $pid ); ?>" aria-label="Save to wishlist"><span class="aa-ms">favorite</span></button>
                                 </div>
