@@ -259,6 +259,69 @@ function aa_cart_count_endpoint() {
 }
 
 /* ------------------------------------------------------------------------
+ * Buy now — one click from any card or product page straight to checkout.
+ *
+ * The button is a plain link to /checkout/?aa-buy-now=ID. On wp_loaded we
+ * pick it up, put the ebook in the cart (digital goods are never duplicated
+ * — an already-carted title jumps straight to checkout) and land the
+ * customer on the address-free checkout page. Add to cart stays untouched.
+ * ---------------------------------------------------------------------- */
+
+add_action( 'wp_loaded', 'aa_buy_now_redirect', 5 );
+
+function aa_buy_now_redirect() {
+        if ( is_admin() || empty( $_GET['aa-buy-now'] ) ) { return; }
+        if ( ! function_exists( 'wc_get_product' ) || ! function_exists( 'WC' ) ) { return; }
+
+        $pid = absint( wp_unslash( $_GET['aa-buy-now'] ) );
+        if ( ! $pid ) { return; }
+
+        $product = wc_get_product( $pid );
+        if ( ! $product || ! $product->is_purchasable() || ! $product->is_in_stock() ) { return; }
+
+        if ( ! WC()->cart && function_exists( 'wc_load_cart' ) ) { wc_load_cart(); }
+        if ( ! WC()->cart ) { return; }
+
+        // One copy per title per order — if it is already in the cart, skip the
+        // add and go straight to checkout.
+        foreach ( WC()->cart->get_cart() as $item ) {
+                if ( (int) $item['product_id'] === $pid ) {
+                        nocache_headers();
+                        wp_safe_redirect( wc_get_checkout_url() );
+                        exit;
+                }
+        }
+
+        WC()->cart->add_to_cart( $pid, 1 );
+        nocache_headers();
+        wp_safe_redirect( wc_get_checkout_url() );
+        exit;
+}
+
+/** Buy-now URL for a product: checkout URL + handler param. */
+function aa_buy_now_url( $product_id ) {
+        return add_query_arg( 'aa-buy-now', (int) $product_id, wc_get_checkout_url() );
+}
+
+/** Buy-now button styles — shipped from this plugin so they never depend on
+ * the baked Elementor page CSS (works on shop, category, search, PDP grids). */
+add_action( 'wp_head', 'aa_buy_now_css', 99 );
+
+function aa_buy_now_css() {
+        echo '<style id="aa-buy-now-css">'
+                . '.aa-buygrp{display:flex;align-items:center;gap:8px;flex:1;justify-content:flex-end}'
+                . '.aa-buy{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--aa-goldbg,#f59e0b);color:var(--aa-ongold,#472a00)!important;font-weight:700;font-size:13px;padding:9px 14px;border-radius:10px;text-decoration:none!important;transition:filter .15s;white-space:nowrap}'
+                . '.aa-buy:hover{filter:brightness(1.08)}'
+                . '.aa-buy .aa-ms{font-size:17px}'
+                . '.aa-add.aa-add-sec{background:var(--aa-cont,#1c2025);border:1px solid var(--aa-line2,rgba(160,142,122,.4));color:var(--aa-tx,#e0e2ea)!important;transition:border-color .15s,color .15s}'
+                . '.aa-add.aa-add-sec:hover{border-color:var(--aa-gold,#ffc174);color:var(--aa-gold,#ffc174)!important;filter:none}'
+                . '.aa-btn-gold.aa-btn-sec{background:var(--aa-cont,#1c2025);border:1px solid var(--aa-line2,rgba(160,142,122,.4));color:var(--aa-tx,#e0e2ea)!important;transition:border-color .15s,color .15s}'
+                . '.aa-btn-gold.aa-btn-sec:hover{border-color:var(--aa-gold,#ffc174);color:var(--aa-gold,#ffc174)!important;filter:none;transform:none}'
+                . '@media(max-width:640px){.aa-buygrp{display:grid;grid-template-columns:1fr;gap:6px}.aa-buygrp .aa-add,.aa-buygrp .aa-buy{justify-content:center}.aa-buy{font-size:11px;padding:9px 10px;border-radius:9px}}'
+                . '</style>';
+}
+
+/* ------------------------------------------------------------------------
  * Digital-only storefront: checkout is address-free.
  *
  * We sell downloadable PDFs — the customer keeps a name and an email and
@@ -839,6 +902,9 @@ function aa_book_card( $product_id ) {
 
         $add_url  = add_query_arg( 'add-to-cart', $product_id, home_url( '/' ) );
         $cart_cls = $product->supports( 'ajax_add_to_cart' ) ? 'add_to_cart_button ajax_add_to_cart' : 'add_to_cart_button';
+        $buy_url  = aa_buy_now_url( $product_id );
+        $show_buy = $product->is_type( 'simple' ) && $product->is_purchasable() && $product->is_in_stock();
+
         ob_start();
         ?>
 <li class="aa-card" data-price="<?php echo esc_attr( $active ); ?>" data-title="<?php echo esc_attr( $name ); ?>">
@@ -865,9 +931,16 @@ function aa_book_card( $product_id ) {
                         <span class="aa-now"><?php echo $price_html; // phpcs:ignore WordPress.Security.EscapeOutput ?></span>
                         <?php if ( $save_html ) : ?><span class="aa-save"><?php echo esc_html( $save_html ); ?></span><?php endif; ?>
                 </div>
-                <a class="aa-add <?php echo esc_attr( $cart_cls ); ?>" data-product_id="<?php echo esc_attr( $product_id ); ?>" data-quantity="1" href="<?php echo esc_url( $add_url ); ?>">
-                        <span class="aa-ms">shopping_cart</span><span>Add to cart</span>
-                </a>
+                <div class="aa-buygrp">
+                        <a class="aa-add aa-add-sec <?php echo esc_attr( $cart_cls ); ?>" data-product_id="<?php echo esc_attr( $product_id ); ?>" data-quantity="1" href="<?php echo esc_url( $add_url ); ?>">
+                                <span class="aa-ms">shopping_cart</span><span>Add to cart</span>
+                        </a>
+                        <?php if ( $show_buy ) : ?>
+                        <a class="aa-buy" href="<?php echo esc_url( $buy_url ); ?>">
+                                <span class="aa-ms">bolt</span><span>Buy now</span>
+                        </a>
+                        <?php endif; ?>
+                </div>
         </div>
 </li>
         <?php
@@ -1027,6 +1100,8 @@ function aa_product_single_shortcode() {
 
         $add_url  = add_query_arg( 'add-to-cart', $pid, home_url( '/' ) );
         $cart_cls = $product->supports( 'ajax_add_to_cart' ) ? 'add_to_cart_button ajax_add_to_cart' : 'add_to_cart_button';
+        $buy_url  = aa_buy_now_url( $pid );
+        $show_buy = $product->is_type( 'simple' ) && $product->is_purchasable() && $product->is_in_stock();
 
         // Demo store: the bundled PDF doubles as the free sample chapter.
         $sample_url = '';
@@ -1097,7 +1172,8 @@ function aa_product_single_shortcode() {
                         <div class="aa-pdp-pricebox">
                                 <div class="aa-pdp-price"><?php echo $price_html; // phpcs:ignore WordPress.Security.EscapeOutput ?><?php echo $save_html; // phpcs:ignore WordPress.Security.EscapeOutput ?></div>
                                 <div class="aa-pdp-cta">
-                                        <a class="aa-btn-gold <?php echo esc_attr( $cart_cls ); ?>" data-product_id="<?php echo esc_attr( $pid ); ?>" data-quantity="1" href="<?php echo esc_url( $add_url ); ?>"><span class="aa-ms">shopping_cart</span><span>Add to cart</span></a>
+                                        <?php if ( $show_buy ) : ?><a class="aa-btn-gold" href="<?php echo esc_url( $buy_url ); ?>"><span class="aa-ms">bolt</span><span>Buy now</span></a><?php endif; ?>
+                                        <a class="aa-btn-gold aa-btn-sec <?php echo esc_attr( $cart_cls ); ?>" data-product_id="<?php echo esc_attr( $pid ); ?>" data-quantity="1" href="<?php echo esc_url( $add_url ); ?>"><span class="aa-ms">shopping_cart</span><span>Add to cart</span></a>
                                         <?php if ( $sample_url ) : ?><a class="aa-btn-ghost" href="<?php echo esc_url( $sample_url ); ?>" target="_blank" rel="noopener"><span class="aa-ms">menu_book</span><span>Read sample</span></a><?php endif; ?>
                                         <button type="button" class="aa-wishbtn aa-wishbtn-lg" data-id="<?php echo esc_attr( $pid ); ?>" aria-label="Save to wishlist"><span class="aa-ms">favorite</span></button>
                                 </div>
